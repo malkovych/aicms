@@ -96,4 +96,4 @@ npm run build       # dist/ for the CLI
 
 ## License
 
-Not decided yet (MIT or AGPL with a commercial cloud). Until a license file is added, all rights are reserved.
+[MIT](LICENSE). AICMS is free for any use, including commercial: build sites, products and services on it without asking or paying. If the project ever needs funding, it will come from donations, never from a paid edition.

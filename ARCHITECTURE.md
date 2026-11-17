@@ -362,4 +362,4 @@ Deployment modes:
 | Content in the database or in git? | The database is the source of truth: changesets, field-level permissions, concurrent agents and transactions all need it. The `git-sync` module mirrors published content to Markdown + frontmatter files and turns pull requests into changesets, so developers and coding agents can still work through git. |
 | Can an agent propose installing a module? | Yes, through Inbox, with the requested permissions shown. A person installs it. |
 | Python SDK | Phase 1, together with the TypeScript SDK. |
-| Kernel license | Open: MIT, or AGPL with a commercial cloud. Until then the repository has no license file. |
+| License | MIT for everything: kernel, SDKs, adapters and official modules. Free for any use, including commercial. If funding is ever needed, it comes from donations, not a paid edition. |

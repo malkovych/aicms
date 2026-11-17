@@ -2,6 +2,12 @@
   "name": "aicms",
   "version": "0.1.0",
   "description": "CMS for AI agents: one schema generates REST, MCP tools, admin and types",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/malkovych/aicms.git"
+  },
+  "homepage": "https://malkovych.github.io/aicms/",
   "private": true,
   "type": "module",
   "bin": {
