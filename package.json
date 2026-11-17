@@ -1,0 +1,39 @@
+{
+  "name": "aicms",
+  "version": "0.1.0",
+  "description": "CMS for AI agents: one schema generates REST, MCP tools, admin and types",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "aicms": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test 'test/*.test.ts'",
+    "example": "npm run build && cd examples/blog && node ../../dist/cli.js dev"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.9",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "hono": "^4.12.19",
+    "jiti": "^2.7.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}

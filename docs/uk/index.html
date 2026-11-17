@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AICMS — CMS для AI-агентів</title>
+<meta name="description" content="AICMS — CMS, побудована для AI-агентів. Опиши модель один раз і отримай REST, MCP-інструменти, адмінку й типи. Модулі складаються як Lego, а кожна зміна агента проходить рев'ю і відкочується.">
+<meta property="og:title" content="AICMS — CMS для AI-агентів">
+<meta property="og:description" content="Одна схема генерує REST, MCP-інструменти, адмінку й типи. Агенти пропонують, люди вирішують.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://malkovych.github.io/aicms/uk/">
+<meta name="theme-color" content="#ECEFF3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D1119" media="(prefers-color-scheme: dark)">
+<link rel="alternate" hreflang="en" href="https://malkovych.github.io/aicms/">
+<link rel="alternate" hreflang="uk" href="https://malkovych.github.io/aicms/uk/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='11' width='26' height='16' rx='2' fill='%232445D6'/%3E%3Crect x='7' y='6' width='7' height='5' rx='1' fill='%232445D6'/%3E%3Crect x='18' y='6' width='7' height='5' rx='1' fill='%232445D6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js" defer></script>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="#top"><b>AI</b>CMS</a>
+    <nav class="links" aria-label="Розділи">
+      <a href="#principles">Принципи</a>
+      <a href="#architecture">Архітектура</a>
+      <a href="#vocabulary">Словник</a>
+      <a href="#project">Проєкт</a>
+      <a href="#modules">Модулі</a>
+      <a href="#agents">Агенти</a>
+      <a href="#studio">Studio</a>
+      <a href="#frameworks">Фреймворки</a>
+      <a href="#roadmap">План</a>
+    </nav>
+    <div class="top-extra">
+      <a class="lang" href="../" hreflang="en" lang="en">EN</a>
+      <a class="gh" href="https://github.com/malkovych/aicms"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <!-- ================= HERO ================= -->
+  <div class="wrap hero">
+    <div>
+      <div class="eyebrow">Концепт архітектури · v0.1 · листопад 2026</div>
+      <h1 class="wordmark"><span class="ai">AI</span>CMS</h1>
+      <p class="lead">CMS, у якій AI-агенти працюють з контентом так само природно, як люди.</p>
+      <p class="body">Опиши модель один раз. AICMS сам згенерує API, MCP-інструменти для агентів, адмінку для людей і типи для фронтенду. Модулі додаються як цеглинки, а кожна зміна агента проходить перевірку і відкочується одним кліком.</p>
+      <div class="wall" aria-label="Шари системи">
+        <span class="brick b-gate">Входи</span>
+        <span class="brick b-core">Ядро</span>
+        <span class="brick b-mod">Модулі</span>
+        <span class="brick b-human">Люди</span>
+        <span class="brick b-adapt">Адаптери</span>
+      </div>
+      <div class="facts">
+        <div class="fact"><b>7</b><span>понять, які треба знати</span></div>
+        <div class="fact"><b>6</b><span>таблиць ядра на будь-який сайт</span></div>
+        <div class="fact"><b>1</b><span>файл конфігурації</span></div>
+      </div>
+      <div class="cta">
+        <a class="pri" href="https://github.com/malkovych/aicms">Відкрити на GitHub</a>
+        <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.uk.md">Читати специфікацію</a>
+      </div>
+      <div class="status"><i></i>Триває фаза 0: ядро, REST і MCP</div>
+    </div>
+
+    <div class="demo" aria-label="Одна модель генерує всі інтерфейси">
+      <div class="filebar"><span class="fname">models/post.ts</span><span>ти пишеш тільки це</span></div>
+<pre class="code"><span class="k">export default</span> <span class="f">defineModel</span>({
+  name: <span class="s">"post"</span>,
+  label: <span class="s">"Статті"</span>,
+  fields: {
+    title: field.<span class="f">text</span>({ required: <span class="n">true</span> }),
+    slug:  field.<span class="f">slug</span>({ from: <span class="s">"title"</span> }),
+    cover: field.<span class="f">media</span>({ alt: <span class="s">"ai"</span> }),
+    body:  field.<span class="f">blocks</span>([<span class="s">"paragraph"</span>, <span class="s">"image"</span>, <span class="s">"cta"</span>]),
+  },
+  agent: {
+    guide: <span class="s">"Коротко, тон дружнього експерта"</span>,
+    can: [<span class="s">"create"</span>, <span class="s">"update"</span>], <span class="c">// публікує людина</span>
+  },
+})</pre>
+      <div class="gen">
+        <svg width="14" height="18" viewBox="0 0 14 18" aria-hidden="true"><path d="M7 1v14M2 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        AICMS генерує
+      </div>
+      <div class="tabs" role="tablist" id="demoTabs" aria-label="Що генерується з моделі">
+        <button class="tab" role="tab" id="t-mcp" aria-controls="p-mcp" aria-selected="true"><i></i>MCP-інструмент</button>
+        <button class="tab" role="tab" id="t-rest" aria-controls="p-rest" aria-selected="false" tabindex="-1"><i></i>REST</button>
+        <button class="tab" role="tab" id="t-sdk" aria-controls="p-sdk" aria-selected="false" tabindex="-1"><i></i>Типи SDK</button>
+        <button class="tab" role="tab" id="t-studio" aria-controls="p-studio" aria-selected="false" tabindex="-1"><i class="h"></i>Форма Studio</button>
+        <button class="tab" role="tab" id="t-desc" aria-controls="p-desc" aria-selected="false" tabindex="-1"><i></i>Опис для агента</button>
+      </div>
+      <div class="panel" role="tabpanel" id="p-mcp" aria-labelledby="t-mcp">
+<pre class="code"><span class="c">// tools/list: агент отримує готовий інструмент</span>
+{
+  <span class="p">"name"</span>: <span class="s">"post_draft"</span>,
+  <span class="p">"description"</span>: <span class="s">"Чернетка статті. Гайд: коротко, тон дружнього експерта"</span>,
+  <span class="p">"inputSchema"</span>: {
+    <span class="p">"type"</span>: <span class="s">"object"</span>,
+    <span class="p">"required"</span>: [<span class="s">"title"</span>],
+    <span class="p">"properties"</span>: {
+      <span class="p">"title"</span>: { <span class="p">"type"</span>: <span class="s">"string"</span> },
+      <span class="p">"cover"</span>: { <span class="p">"type"</span>: <span class="s">"object"</span>, <span class="p">"properties"</span>: { … } },
+      <span class="p">"body"</span>:  { <span class="p">"type"</span>: <span class="s">"string"</span>, <span class="p">"format"</span>: <span class="s">"markdown"</span> }
+    }
+  }
+}</pre>
+      </div>
+      <div class="panel" role="tabpanel" id="p-rest" aria-labelledby="t-rest" hidden>
+<pre class="code"><span class="f">GET</span>    /api/v1/post?fields=title,slug
+<span class="f">GET</span>    /api/v1/post/:id
+<span class="f">POST</span>   /api/v1/post               <span class="c">→ чернетка в твоєму changeset</span>
+<span class="f">PATCH</span>  /api/v1/post/:id           <span class="c">→ чернетка в твоєму changeset</span>
+<span class="f">POST</span>   /api/v1/changesets/submit  <span class="c">→ на перевірку</span>
+<span class="f">GET</span>    /openapi.json              <span class="c">для function calling</span>
+
+<span class="c"># 403, якщо токен агента не має потрібного scope</span>
+<span class="c"># 422 з назвою поля, якщо дані не пройшли схему</span></pre>
+      </div>
+      <div class="panel" role="tabpanel" id="p-sdk" aria-labelledby="t-sdk" hidden>
+<pre class="code"><span class="k">import</span> { cms } <span class="k">from</span> <span class="s">"@aicms/next"</span>
+
+<span class="k">const</span> post = <span class="k">await</span> cms.post.<span class="f">get</span>({ slug: <span class="s">"yak-obraty-spf"</span> })
+
+post.title   <span class="c">// string</span>
+post.cover   <span class="c">// Media { url, alt, width, height }</span>
+post.body    <span class="c">// Block&lt;"paragraph" | "image" | "cta"&gt;[]</span>
+post.author  <span class="c">// помилка типів ще до запуску:</span>
+             <span class="c">// такого поля в моделі post немає</span></pre>
+      </div>
+      <div class="panel" role="tabpanel" id="p-studio" aria-labelledby="t-studio" hidden>
+        <div class="mini">
+          <div class="mf"><label>Заголовок *</label><div class="in"><span>Як обрати SPF на зиму</span></div></div>
+          <div class="mf"><label>Slug</label><div class="in"><span class="mono">yak-obraty-spf-na-zymu</span><span class="pill ghost">з заголовка</span></div></div>
+          <div class="mf"><label>Обкладинка</label><div class="in"><span class="cov"><span class="thumb"></span><span>snow-skincare.avif</span></span><span class="pill">alt від AI</span></div></div>
+          <div class="mf"><label>Текст</label><div class="blocks"><span class="blk">Абзац</span><span class="blk">Зображення</span><span class="blk">Абзац</span><span class="blk">CTA</span><span class="blk add">+ блок</span></div></div>
+        </div>
+      </div>
+      <div class="panel" role="tabpanel" id="p-desc" aria-labelledby="t-desc" hidden>
+<pre class="code"><span class="c"># cms_describe({ model: "post" })</span>
+<span class="p">post</span> · Статті
+поля     title*, slug, cover, body
+body     markdown + блоки :::image, :::cta
+гайд     Коротко, тон дружнього експерта
+можна    create, update
+не можна publish → рішення людини у «Вхідних»
+
+<span class="c"># той самий текст лежить у /llms.txt</span></pre>
+      </div>
+      <div class="panel-note">Поміняй поле в моделі, і всі п'ять інтерфейсів оновляться разом. Розсинхрону немає, бо немає ручного коду.</div>
+    </div>
+  </div>
+
+  <!-- ================= PRINCIPLES ================= -->
+  <section class="sec" id="principles">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw ink"></span>Принципи</span>
+        <h2>Шість правил, які тримають систему простою</h2>
+        <p>Кожне рішення в архітектурі перевіряється цими правилами. Якщо фіча їх ламає, вона йде в модуль або не робиться зовсім.</p>
+      </div>
+      <div class="principles">
+        <div class="pr"><span class="sw core"></span><h3>Одна схема, усе інше генерується</h3><p>Модель описується в TypeScript один раз. З неї виходять таблиці, валідація, REST, MCP, форми Studio, типи й документація для агентів.</p></div>
+        <div class="pr"><span class="sw core"></span><h3>Кожна дія — це Action</h3><p>Створити запис, згенерувати alt-текст, провести SEO-аудит: одна сутність з input/output-схемою, правами й хуками. Людина й агент проходять той самий шлях.</p></div>
+        <div class="pr"><span class="sw human"></span><h3>Агент не пише в прод напряму</h3><p>Зміни агента лягають у changeset, проходять перевірки й рев'ю. Журнал подій дозволяє відкотити що завгодно.</p></div>
+        <div class="pr"><span class="sw mod"></span><h3>Модуль — одна папка</h3><p>Один файл-маніфест оголошує, що модуль дає і що йому потрібно. Ніякої глобальної каші з хуків і пріоритетів.</p></div>
+        <div class="pr"><span class="sw core"></span><h3>Мінімум файлів</h3><p>Проєкт — це конфіг, папка моделей і, за потреби, власні модулі. Усе згенероване лежить у <code>.aicms/</code> і не комітиться.</p></div>
+        <div class="pr"><span class="sw gate"></span><h3>Будь-який фреймворк і рантайм</h3><p>Ядро на веб-стандартах <code>Request/Response</code>: Node, Bun, Deno, Cloudflare Workers. Адаптери для всіх популярних фронтендів.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ARCHITECTURE ================= -->
+  <section class="sec" id="architecture">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw core"></span>Архітектура</span>
+        <h2>Чотири шари і один конвеєр посередині</h2>
+        <p>Агенти, люди й фронтенди заходять через різні входи, але кожен виклик перетворюється на Action і проходить один і той самий конвеєр ядра. Саме ядро генерує всі входи зі схем.</p>
+      </div>
+
+      <figure class="fig">
+        <div class="scroll">
+          <svg class="dg" viewBox="0 0 960 604" role="img" aria-label="Агенти, люди й фронтенди звертаються до входів MCP, REST, OpenAPI, GraphQL, SDK, Events і A2A. Кожен виклик стає Action і проходить конвеєр ядра: валідація, політика, хуки, виконання, журнал, подія. Schema Engine генерує входи, Module Loader підключає модулі, Content Store пише через адаптери в базу, медіасховище і векторний індекс.">
+            <defs>
+              <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+            </defs>
+            <rect class="r-actor" x="30" y="16" width="280" height="64" rx="10"/>
+            <text class="t" x="50" y="43">Агенти</text>
+            <text class="s" x="50" y="64">Claude · GPT · Gemini · власні</text>
+            <rect class="r-human" x="340" y="16" width="280" height="64" rx="10"/>
+            <text class="t" x="360" y="43">Люди</text>
+            <text class="s" x="360" y="64">Studio · ⌘K · Вхідні</text>
+            <rect class="r-actor" x="650" y="16" width="280" height="64" rx="10"/>
+            <text class="t" x="670" y="43">Фронтенди</text>
+            <text class="s" x="670" y="64">Next · Nuxt · SvelteKit · Astro</text>
+
+            <line class="ar" x1="170" y1="80" x2="170" y2="130" marker-end="url(#a1)"/>
+            <text class="lbl" x="180" y="110">токен + scopes</text>
+            <line class="ar" x1="480" y1="80" x2="480" y2="130" marker-end="url(#a1)"/>
+            <text class="lbl" x="490" y="110">сесія + роль</text>
+            <line class="ar" x1="790" y1="80" x2="790" y2="130" marker-end="url(#a1)"/>
+            <text class="lbl" x="800" y="110">read-токен</text>
+
+            <rect class="r-gate" x="30" y="132" width="900" height="64" rx="10"/>
+            <text class="cap c-gate" x="50" y="168">ВХОДИ</text>
+            <rect class="r-pill-gate" x="140" y="148" width="100" height="32" rx="16"/><text class="s mid" x="190" y="168" style="fill:currentColor">MCP</text>
+            <rect class="r-pill-gate" x="252" y="148" width="100" height="32" rx="16"/><text class="s mid" x="302" y="168" style="fill:currentColor">REST</text>
+            <rect class="r-pill-gate" x="364" y="148" width="100" height="32" rx="16"/><text class="s mid" x="414" y="168" style="fill:currentColor">OpenAPI</text>
+            <rect class="r-pill-gate" x="476" y="148" width="100" height="32" rx="16"/><text class="s mid" x="526" y="168" style="fill:currentColor">GraphQL</text>
+            <rect class="r-pill-gate" x="588" y="148" width="100" height="32" rx="16"/><text class="s mid" x="638" y="168" style="fill:currentColor">SDK</text>
+            <rect class="r-pill-gate" x="700" y="148" width="100" height="32" rx="16"/><text class="s mid" x="750" y="168" style="fill:currentColor">Events</text>
+            <rect class="r-pill-gate" x="812" y="148" width="100" height="32" rx="16"/><text class="s mid" x="862" y="168" style="fill:currentColor">A2A</text>
+
+            <line class="ar" x1="480" y1="196" x2="480" y2="246" marker-end="url(#a1)"/>
+            <text class="lbl" x="490" y="226">кожен виклик = Action</text>
+
+            <path class="ar dash" d="M61 388 H44 V200" marker-end="url(#a1)"/>
+            <text class="lbl" x="54" y="226">генерує</text>
+
+            <rect class="r-core" x="30" y="248" width="900" height="196" rx="12"/>
+            <text class="cap c-core" x="61" y="276">ЯДРО · ACTION BUS</text>
+            <rect class="r-pill-core" x="61" y="288" width="118" height="40" rx="8"/><text class="s mid" x="120" y="313" style="fill:currentColor">валідація</text>
+            <rect class="r-pill-core" x="205" y="288" width="118" height="40" rx="8"/><text class="s mid" x="264" y="313" style="fill:currentColor">політика</text>
+            <rect class="r-pill-core" x="349" y="288" width="118" height="40" rx="8"/><text class="s mid" x="408" y="313" style="fill:currentColor">хуки</text>
+            <rect class="r-pill-core" x="493" y="288" width="118" height="40" rx="8"/><text class="s mid" x="552" y="313" style="fill:currentColor">виконання</text>
+            <rect class="r-pill-core" x="637" y="288" width="118" height="40" rx="8"/><text class="s mid" x="696" y="313" style="fill:currentColor">журнал</text>
+            <rect class="r-pill-core" x="781" y="288" width="118" height="40" rx="8"/><text class="s mid" x="840" y="313" style="fill:currentColor">подія</text>
+            <line class="ar" x1="179" y1="308" x2="203" y2="308" marker-end="url(#a1)"/>
+            <line class="ar" x1="323" y1="308" x2="347" y2="308" marker-end="url(#a1)"/>
+            <line class="ar" x1="467" y1="308" x2="491" y2="308" marker-end="url(#a1)"/>
+            <line class="ar" x1="611" y1="308" x2="635" y2="308" marker-end="url(#a1)"/>
+            <line class="ar" x1="755" y1="308" x2="779" y2="308" marker-end="url(#a1)"/>
+            <line class="ar" x1="696" y1="328" x2="696" y2="350" marker-end="url(#a1)"/>
+
+            <rect class="r-pill-core" x="61" y="352" width="260" height="72" rx="10"/>
+            <text class="t" x="81" y="382">Schema Engine</text>
+            <text class="s" x="81" y="404">моделі → типи · API · MCP · форми</text>
+            <rect class="r-pill-core" x="350" y="352" width="260" height="72" rx="10"/>
+            <text class="t" x="370" y="382">Module Loader</text>
+            <text class="s" x="370" y="404">provides / requires · ізоляція</text>
+            <rect class="r-pill-core" x="639" y="352" width="260" height="72" rx="10"/>
+            <text class="t" x="659" y="382">Content Store</text>
+            <text class="s" x="659" y="404">entries · changesets · events</text>
+
+            <line class="ar" x1="480" y1="424" x2="480" y2="486" marker-end="url(#a1)"/>
+            <text class="lbl" x="490" y="468">provides / requires</text>
+            <line class="ar" x1="769" y1="424" x2="769" y2="486" marker-end="url(#a1)"/>
+            <text class="lbl" x="779" y="468">читає / пише</text>
+
+            <rect class="r-mod" x="30" y="488" width="530" height="100" rx="10"/>
+            <text class="cap c-mod" x="50" y="514">МОДУЛІ</text>
+            <g>
+              <rect class="r-brick" x="59" y="527" width="12" height="5" rx="1.5"/><rect class="r-brick" x="87" y="527" width="12" height="5" rx="1.5"/>
+              <rect class="r-brick" x="47" y="532" width="64" height="34" rx="3"/><text class="t-brick mid" x="79" y="553">seo</text>
+              <rect class="r-brick" x="131" y="527" width="12" height="5" rx="1.5"/><rect class="r-brick" x="159" y="527" width="12" height="5" rx="1.5"/>
+              <rect class="r-brick" x="119" y="532" width="64" height="34" rx="3"/><text class="t-brick mid" x="151" y="553">i18n</text>
+              <rect class="r-brick" x="203" y="527" width="12" height="5" rx="1.5"/><rect class="r-brick" x="231" y="527" width="12" height="5" rx="1.5"/>
+              <rect class="r-brick" x="191" y="532" width="64" height="34" rx="3"/><text class="t-brick mid" x="223" y="553">media</text>
+              <rect class="r-brick" x="275" y="527" width="12" height="5" rx="1.5"/><rect class="r-brick" x="303" y="527" width="12" height="5" rx="1.5"/>
+              <rect class="r-brick" x="263" y="532" width="64" height="34" rx="3"/><text class="t-brick mid" x="295" y="553">search</text>
+              <rect class="r-brick" x="347" y="527" width="12" height="5" rx="1.5"/><rect class="r-brick" x="375" y="527" width="12" height="5" rx="1.5"/>
+              <rect class="r-brick" x="335" y="532" width="64" height="34" rx="3"/><text class="t-brick mid" x="367" y="553">commerce</text>
+              <rect class="r-brick" x="419" y="527" width="12" height="5" rx="1.5"/><rect class="r-brick" x="447" y="527" width="12" height="5" rx="1.5"/>
+              <rect class="r-brick" x="407" y="532" width="64" height="34" rx="3"/><text class="t-brick mid" x="439" y="553">reviews</text>
+              <rect class="r-brick" x="491" y="527" width="12" height="5" rx="1.5"/><rect class="r-brick" x="519" y="527" width="12" height="5" rx="1.5"/>
+              <rect class="r-brick" x="479" y="532" width="64" height="34" rx="3"/><text class="t-brick mid" x="511" y="553">твій</text>
+            </g>
+
+            <rect class="r-adapt" x="590" y="488" width="340" height="100" rx="10"/>
+            <text class="cap c-adapt" x="610" y="514">АДАПТЕРИ</text>
+            <text class="s" x="610" y="538" style="fill:currentColor">БД: SQLite · Postgres · D1</text>
+            <text class="s" x="610" y="557" style="fill:currentColor">Медіа: local · S3 · R2</text>
+            <text class="s" x="610" y="576" style="fill:currentColor">Вектор: sqlite-vec · pgvector</text>
+          </svg>
+        </div>
+        <figcaption>Пунктирна стрілка зліва — головна ідея: входи ніхто не пише вручну, їх генерує Schema Engine з моделей і модулів. Тому MCP, REST і Studio завжди однаково розуміють дані й права.</figcaption>
+      </figure>
+
+      <div class="duo">
+        <div class="plate note">
+          <h3>Конвеєр Action: однаковий для всіх</h3>
+          <p>Будь-який вхід лише викликає Action. Валідація, перевірка прав, хуки модулів, запис у журнал і подія для вебхуків відбуваються в одному місці, тому агент не може обійти правила, які діють для людини.</p>
+          <ul class="rows">
+            <li><code>валідація</code><span>Standard Schema, помилка з назвою поля</span></li>
+            <li><code>політика</code><span>scopes до рівня поля, бюджет, режим рев'ю</span></li>
+            <li><code>журнал</code><span>хто, що, коли, через який вхід</span></li>
+            <li><code>подія</code><span>вебхук фронтенду, SSE для агентів</span></li>
+          </ul>
+        </div>
+        <div class="plate note">
+          <h3>Шість таблиць ядра на будь-який сайт</h3>
+          <p>Кількість моделей не змінює схему бази. Записи зберігаються як JSON-документи, а поля з <code>indexed: true</code> отримують індекси на виразах у SQLite і Postgres.</p>
+          <ul class="rows">
+            <li><code>entries</code><span>поточний стан кожного запису</span></li>
+            <li><code>versions</code><span>незмінна історія</span></li>
+            <li><code>changesets</code><span>гілки змін від агентів і людей</span></li>
+            <li><code>events</code><span>журнал усіх Actions</span></li>
+            <li><code>media</code><span>файли, метадані, alt-тексти</span></li>
+            <li><code>tokens</code><span>токени агентів, лише у вигляді хешів</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VOCABULARY ================= -->
+  <section class="sec" id="vocabulary">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw core"></span>Словник</span>
+        <h2>Сім понять, і більше вчити нічого</h2>
+        <p>Людина орієнтується в системі за п'ять хвилин. Агент отримує ці ж поняття через <code>cms_describe</code>.</p>
+      </div>
+      <dl class="vocab">
+        <div class="vrow"><dt>Model</dt><dd>Схема типу контенту разом з інструкціями для агента</dd><dd class="ex">post, product, review</dd></div>
+        <div class="vrow"><dt>Entry</dt><dd>Один запис моделі з історією версій</dd><dd class="ex">«Як обрати SPF на зиму»</dd></div>
+        <div class="vrow"><dt>Block</dt><dd>Цеглинка всередині rich-контенту</dd><dd class="ex">paragraph, image, cta</dd></div>
+        <div class="vrow"><dt>Action</dt><dd>Будь-яка операція з типізованим входом, виходом і правами</dd><dd class="ex">post.draft, seo.audit</dd></div>
+        <div class="vrow"><dt>Module</dt><dd>Пакет із моделями, блоками, Actions, хуками й панелями Studio</dd><dd class="ex">seo, commerce, reviews</dd></div>
+        <div class="vrow"><dt>Agent</dt><dd>Ідентичність агента: права, бюджет, режим рев'ю</dd><dd class="ex">writer, seo, moderator</dd></div>
+        <div class="vrow"><dt>Changeset</dt><dd>Набір запропонованих змін, що чекає перевірки</dd><dd class="ex">«writer: 3 нові статті»</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ================= PROJECT ================= -->
+  <section class="sec" id="project">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw core"></span>Структура проєкту</span>
+        <h2>Сайт описують два види файлів</h2>
+        <p>У WordPress логіка сайту розкидана між темою, плагінами й <code>functions.php</code>. В AICMS вона живе в моделях і модулях, а все інше генерується.</p>
+      </div>
+      <div class="duo" style="margin-top:0">
+        <div class="plate">
+          <div class="tree-head"><h3>AICMS-проєкт</h3><p>усе, що ти пишеш</p></div>
+<pre class="tree">my-site/
+├── <span class="hl">aicms.config.ts</span>   <span class="d"># БД, медіа, мови, модулі, агенти</span>
+├── models/
+│   ├── <span class="hl">post.ts</span>
+│   ├── <span class="hl">page.ts</span>
+│   └── <span class="hl">product.ts</span>
+├── modules/          <span class="d"># необов'язково</span>
+│   └── reviews/
+│       └── <span class="hl">module.ts</span>
+└── .aicms/           <span class="d"># згенероване, у .gitignore</span></pre>
+        </div>
+        <div class="plate">
+          <div class="tree-head"><h3>Типовий WordPress-сайт</h3><p>ядро + тема + плагіни</p></div>
+<pre class="tree"><span class="g">wp-admin/            # ядро</span>
+<span class="g">wp-includes/         # ядро</span>
+wp-content/
+├── themes/my-theme/
+│   ├── functions.php    <span class="d"># логіка, хуки, CPT</span>
+│   ├── header.php  footer.php
+│   ├── single.php  page.php  archive.php
+│   └── template-parts/ …
+├── plugins/
+│   ├── advanced-custom-fields/
+│   ├── wordpress-seo/
+│   ├── woocommerce/
+│   └── … ще 15–30
+└── uploads/
+wp-config.php  .htaccess  xmlrpc.php</pre>
+        </div>
+      </div>
+      <div class="duo">
+        <div class="codecard">
+          <div class="filebar"><span class="fname">aicms.config.ts</span><span>увесь сайт в одному місці</span></div>
+<pre class="code"><span class="k">export default</span> <span class="f">defineConfig</span>({
+  db: <span class="f">sqlite</span>(<span class="s">".aicms/data.db"</span>), <span class="c">// або postgres()</span>
+  media: <span class="f">local</span>(<span class="s">"uploads"</span>),    <span class="c">// або s3(), r2()</span>
+  locales: [<span class="s">"uk"</span>, <span class="s">"en"</span>],
+  modules: [<span class="f">seo</span>(), <span class="f">i18n</span>(), <span class="f">media</span>({ altText: <span class="s">"ai"</span> })],
+  agents: {
+    writer: { scopes: [<span class="s">"post:draft"</span>], review: <span class="s">"human"</span> },
+    seo:    { scopes: [<span class="s">"post:update.seo"</span>], review: <span class="s">"auto"</span> },
+    moderator: {
+      scopes: [<span class="s">"reviews:write"</span>],
+      budget: { actionsPerHour: <span class="n">500</span> },
+    },
+  },
+})</pre>
+        </div>
+        <div class="codecard">
+          <div class="filebar"><span class="fname">terminal</span><span>CLI</span></div>
+<pre class="code"><span class="c"># новий проєкт</span>
+<span class="f">npx</span> aicms init
+
+<span class="c"># Studio /studio · API /api · MCP /mcp</span>
+<span class="f">npx</span> aicms dev
+
+<span class="c"># токен для нового агента</span>
+<span class="f">npx</span> aicms agent create writer
+
+<span class="c"># рев'ю змін агентів з терміналу</span>
+<span class="f">npx</span> aicms changes
+<span class="f">npx</span> aicms merge cs_8f2k
+
+<span class="c"># модуль: конфіг, міграція, типи, інструменти</span>
+<span class="f">npx</span> aicms add seo</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MODULES ================= -->
+  <section class="sec" id="modules">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw mod"></span>Модулі</span>
+        <h2>Модулі складаються як Lego</h2>
+        <p>Модуль просить можливість, а не конкретний пакет. Натисни на цеглинки: залежності підтягнуться самі, а інструменти агента й меню Studio перебудуються.</p>
+      </div>
+      <div class="lego">
+        <div class="plate lego-pick">
+          <div class="sub">Доступні модулі</div>
+          <div class="bricks" id="legoBricks"></div>
+          <p class="log" id="legoLog" aria-live="polite"></p>
+        </div>
+        <div class="plate lego-out">
+          <div class="count"><b id="toolCount">13</b><span class="muted">інструментів бачить агент через MCP</span></div>
+          <ul class="tools" id="toolList" aria-label="Інструменти агента"></ul>
+          <div class="sub">Меню Studio</div>
+          <div class="navpills" id="navList"></div>
+        </div>
+      </div>
+      <div class="duo">
+        <div class="plate note">
+          <h3>Можливості замість пакетів</h3>
+          <p>Модуль <code>reviews</code> не знає про Stripe чи LiqPay. Він просить <code>commerce</code>, а <code>commerce</code> просить <code>payments</code>. Хто їх надає, вирішує конфіг.</p>
+          <table class="caps">
+            <thead><tr><th>requires</th><th>хто може надати</th></tr></thead>
+            <tbody>
+              <tr><td><code>payments</code></td><td>liqpay · monobank · stripe</td></tr>
+              <tr><td><code>shipping</code></td><td>nova-poshta · ukrposhta · dhl</td></tr>
+              <tr><td><code>search</code></td><td>search-sqlite · search-pg · meilisearch</td></tr>
+              <tr><td><code>ai.image</code></td><td>openai-images · flux · local-sd</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="codecard">
+          <div class="filebar"><span class="fname">modules/reviews/module.ts</span><span>увесь модуль</span></div>
+<pre class="code"><span class="k">export default</span> <span class="f">defineModule</span>({
+  name: <span class="s">"reviews"</span>,
+  requires: [<span class="s">"commerce"</span>],
+  uses: [<span class="s">"product"</span>], <span class="c">// доступ до чужих моделей явний</span>
+  models: {
+    review: { fields: {
+      product: field.<span class="f">ref</span>(<span class="s">"product"</span>),
+      rating:  field.<span class="f">number</span>({ min: <span class="n">1</span>, max: <span class="n">5</span> }),
+      status:  field.<span class="f">enum</span>([<span class="s">"pending"</span>, <span class="s">"published"</span>]),
+    }},
+  },
+  actions: {
+    moderate: <span class="f">action</span>({
+      description: <span class="s">"Схвалити або відхилити відгук"</span>,
+      scope: <span class="s">"reviews:write"</span>,
+      input: { id: field.<span class="f">id</span>(), ok: field.<span class="f">boolean</span>() },
+      run: ({ input, ctx }) =&gt; ctx.<span class="f">draft</span>(<span class="s">"review"</span>, …),
+    }),
+  },
+  on: { <span class="s">"changeset.merged"</span>: notifyModerator },
+  studio: { nav: { label: <span class="s">"Відгуки"</span> } },
+})</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= AGENTS ================= -->
+  <section class="sec" id="agents">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw gate"></span>Агенти</span>
+        <h2>Будь-який агент підключається за хвилину</h2>
+        <p>Вісім входів покривають усі популярні способи, якими агенти працюють сьогодні. Агент бачить тільки ті інструменти, на які має права.</p>
+      </div>
+      <div class="gates">
+        <div class="plate gate"><h3>MCP</h3><span class="ep">/mcp · npx aicms mcp</span><p>Claude, Cursor, ChatGPT і будь-який MCP-клієнт. Streamable HTTP або stdio.</p></div>
+        <div class="plate gate"><h3>REST</h3><span class="ep">/api/v1/*</span><p>Звичайні HTTP-запити з токеном агента. n8n, Make, скрипти.</p></div>
+        <div class="plate gate"><h3>OpenAPI</h3><span class="ep">/openapi.json</span><p>Function calling у будь-якій LLM, LangChain, LlamaIndex.</p></div>
+        <div class="plate gate"><h3>GraphQL</h3><span class="ep">/graphql</span><p>Складні вибірки для фронтендів і аналітичних агентів.</p></div>
+        <div class="plate gate"><h3>SDK</h3><span class="ep">@aicms/client · pip install aicms</span><p>Власні агенти на TypeScript і Python з типами зі схем.</p></div>
+        <div class="plate gate"><h3>Events</h3><span class="ep">webhooks · /events (SSE)</span><p>Агент реагує на зміни: новий відгук, нове замовлення, публікація.</p></div>
+        <div class="plate gate"><h3>A2A</h3><span class="ep">/.well-known/agent.json</span><p>Картка агента для протоколу агент-до-агента.</p></div>
+        <div class="plate gate"><h3>Discovery</h3><span class="ep">/llms.txt · /.well-known/aicms.json</span><p>Агент сам дізнається, які моделі й дії тут є.</p></div>
+      </div>
+
+      <figure class="fig" style="margin-top:20px">
+        <div class="scroll">
+          <svg class="dg" viewBox="0 0 1000 290" role="img" aria-label="Шлях зміни від агента: агент пише чернетку в changeset, подає на перевірки, зелені перевірки йдуть на рев'ю, після merge запис опубліковано і вебхук ревалідує фронтенд. Червоні перевірки або відхилення повертають changeset агенту з коментарем. Кожен крок пише в журнал подій, з якого публікацію можна відкотити.">
+            <defs>
+              <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+              <marker id="a2c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="fill-core" d="M0 0L10 5L0 10z"/></marker>
+            </defs>
+            <rect class="r-core" x="190" y="16" width="750" height="40" rx="8"/>
+            <text class="t" x="210" y="41">Журнал подій</text>
+            <text class="s" x="320" y="41">кожен крок: хто, що, коли, через який вхід</text>
+            <line class="tick" x1="260" y1="100" x2="260" y2="56"/>
+            <line class="tick" x1="455" y1="100" x2="455" y2="56"/>
+            <line class="tick" x1="650" y1="100" x2="650" y2="56"/>
+            <line class="tick" x1="855" y1="100" x2="855" y2="56"/>
+
+            <rect class="r-actor" x="20" y="100" width="120" height="60" rx="10"/>
+            <text class="t mid" x="80" y="126">Агент</text>
+            <text class="s mid" x="80" y="146">MCP · REST · SDK</text>
+            <rect class="r-pill-core" x="190" y="100" width="140" height="60" rx="10"/>
+            <text class="t mid" x="260" y="126">Чернетка</text>
+            <text class="s mid" x="260" y="146">у changeset</text>
+            <rect class="r-pill-core" x="380" y="100" width="150" height="60" rx="10"/>
+            <text class="t mid" x="455" y="126">Перевірки</text>
+            <text class="s mid" x="455" y="146">схема · унікальність</text>
+            <rect class="r-human" x="580" y="100" width="140" height="60" rx="10"/>
+            <text class="t mid" x="650" y="126">Рев’ю</text>
+            <text class="s mid" x="650" y="146">auto або людина</text>
+            <rect class="r-core" x="770" y="100" width="170" height="60" rx="10"/>
+            <text class="t mid" x="855" y="126">Опубліковано</text>
+            <text class="s mid" x="855" y="146">нова версія запису</text>
+            <rect class="r-actor" x="770" y="216" width="170" height="56" rx="10"/>
+            <text class="t mid" x="855" y="240">Фронтенд</text>
+            <text class="s mid" x="855" y="259">ревалідація кешу</text>
+
+            <line class="ar" x1="140" y1="130" x2="188" y2="130" marker-end="url(#a2)"/>
+            <text class="lbl mono mid" x="165" y="120">draft</text>
+            <line class="ar" x1="330" y1="130" x2="378" y2="130" marker-end="url(#a2)"/>
+            <text class="lbl mono mid" x="355" y="120">submit</text>
+            <line class="ar" x1="530" y1="130" x2="578" y2="130" marker-end="url(#a2)"/>
+            <text class="lbl mid" x="555" y="120">зелені</text>
+            <line class="ar" x1="720" y1="130" x2="768" y2="130" marker-end="url(#a2)"/>
+            <text class="lbl mono mid" x="745" y="120">merge</text>
+            <line class="ar" x1="855" y1="160" x2="855" y2="214" marker-end="url(#a2)"/>
+            <text class="lbl" x="865" y="192">вебхук</text>
+
+            <path class="ar" d="M650 160 V214 Q650 226 638 226 H272 Q260 226 260 214 V162" marker-end="url(#a2)"/>
+            <line class="ar" x1="455" y1="160" x2="455" y2="226"/>
+            <text class="lbl" x="463" y="196">червоні</text>
+            <text class="lbl" x="658" y="196">відхилено</text>
+            <text class="lbl mid" x="455" y="248">назад агенту з коментарем</text>
+
+            <line class="undo" x1="915" y1="56" x2="915" y2="98" marker-end="url(#a2c)"/>
+            <text class="lbl c-core" x="922" y="84">відкат</text>
+          </svg>
+        </div>
+        <figcaption>Агент ніколи не пише в опублікований контент напряму. Червоні перевірки чи відмова людини повертають changeset агенту разом з коментарем, а будь-яку публікацію можна відкотити з журналу подій.</figcaption>
+      </figure>
+
+      <div class="duo">
+        <div class="plate note">
+          <h3>Інструменти агента</h3>
+          <p>Чотири інструменти ядра, чотири згенеровані на кожну модель, плюс Actions встановлених модулів. Інструмент чернетки показує лише ті поля, які агенту дозволено змінювати.</p>
+          <table class="toolt">
+            <tr><td>cms_describe</td><td>моделі, поля, гайди, приклади, доступні дії</td></tr>
+            <tr><td>cms_search</td><td>повнотекстовий пошук по моделях</td></tr>
+            <tr><td>post_list / post_get</td><td>читання з вибором полів і пагінацією</td></tr>
+            <tr><td>post_draft</td><td>створити або змінити запис у changeset</td></tr>
+            <tr><td>post_delete</td><td>запропонувати видалення запису</td></tr>
+            <tr><td>cms_submit</td><td>віддати changeset на перевірку</td></tr>
+            <tr><td>cms_changes</td><td>мої changesets і коментарі рев'юера</td></tr>
+            <tr><td>seo_audit …</td><td>Actions модулів, якщо є права</td></tr>
+          </table>
+        </div>
+        <div class="plate note">
+          <h3>Markdown на вході, блоки в базі</h3>
+          <p>Агентам зручно писати Markdown, людям потрібен візуальний редактор. AICMS зберігає блоки, а агенту віддає й приймає Markdown-проєкцію тих самих даних.</p>
+          <div class="mdpair">
+            <div class="lab"><span>пише агент</span><span>markdown</span></div>
+            <div class="codecard">
+<pre class="code"><span class="p">## Як обрати SPF на зиму</span>
+Сніг відбиває до 80% UV-променів.
+
+:::cta{href=<span class="s">"/spf"</span> label=<span class="s">"Обрати крем"</span>}</pre>
+            </div>
+            <div class="lab"><span>зберігає AICMS</span><span>blocks</span></div>
+            <div class="codecard">
+<pre class="code">[{ <span class="p">"type"</span>: <span class="s">"heading"</span>, <span class="p">"level"</span>: <span class="n">2</span>, … },
+ { <span class="p">"type"</span>: <span class="s">"paragraph"</span>, <span class="p">"text"</span>: <span class="s">"Сніг…"</span> },
+ { <span class="p">"type"</span>: <span class="s">"cta"</span>, <span class="p">"href"</span>: <span class="s">"/spf"</span>, … }]</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="guard">
+        <div class="plate note"><span class="sw gate"></span><h3>Права до поля</h3><p><code>post:update.seo</code> дозволяє міняти лише SEO-поля. Решти моделі навіть немає в схемі інструмента.</p></div>
+        <div class="plate note"><span class="sw human"></span><h3>Режим рев'ю</h3><p><code>human</code>, <code>auto</code> або <code>none</code> для кожного агента окремо. Новим агентам за замовчуванням <code>human</code>.</p></div>
+        <div class="plate note"><span class="sw core"></span><h3>Бюджети</h3><p>Ліміти дій на годину і розміру changeset. Перевищення ставить агента на паузу до нового вікна.</p></div>
+        <div class="plate note"><span class="sw gate"></span><h3>Kill switch</h3><p>Одна команда відкликає токени агента і відхиляє всі його незмерджені зміни.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STUDIO ================= -->
+  <section class="sec" id="studio">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw human"></span>Studio</span>
+        <h2>Людина бачить, що зробили агенти, і вирішує</h2>
+        <p>П'ять розділів у меню. Головний з них — «Вхідні»: сюди приходять changesets від агентів з дифом, перевірками й кнопками рішення.</p>
+      </div>
+
+      <div class="studio" aria-label="Приклад інтерфейсу Studio">
+        <div class="st-bar">
+          <span class="mark"><b>AI</b>CMS</span>
+          <span class="st-site">demo-shop.ua</span>
+          <div class="st-search"><span>Знайди або попроси: «статті без обкладинки»</span><span class="kbd">⌘K</span></div>
+        </div>
+        <div class="st-body">
+          <nav class="st-nav" aria-label="Меню Studio (приклад)">
+            <a href="#studio"><svg viewBox="0 0 16 16"><path d="M4 1.8h5.5L12.5 5v9.2H4z M9.5 1.8V5h3"/></svg>Контент</a>
+            <a href="#studio"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="7" r="1.2"/><path d="M2.5 12l3.5-3 3 2.2 2-1.4 2.5 2"/></svg>Медіа</a>
+            <a href="#studio" class="on"><svg viewBox="0 0 16 16"><path d="M2 9l2-6h8l2 6v4H2z M2 9h3.5l1 2h3l1-2H14"/></svg>Вхідні<span class="cnt">2</span></a>
+            <a href="#studio"><svg viewBox="0 0 16 16"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 2v3 M6 9h.01 M10 9h.01"/></svg>Агенти</a>
+            <a href="#studio"><svg viewBox="0 0 16 16"><rect x="2" y="8" width="6" height="5"/><rect x="8" y="8" width="6" height="5"/><rect x="5" y="3" width="6" height="5"/></svg>Модулі</a>
+            <span class="sp"></span>
+            <a href="#studio"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2 M8 12.5v2 M1.5 8h2 M12.5 8h2 M3.4 3.4l1.4 1.4 M11.2 11.2l1.4 1.4 M3.4 12.6l1.4-1.4 M11.2 4.8l1.4-1.4"/></svg>Налаштування</a>
+          </nav>
+          <div class="st-list">
+            <h4>Вхідні</h4>
+            <div class="st-item on"><div class="who"><span class="agent"><i></i>writer</span><span>4 хв</span></div><div class="what">Нова стаття: Як обрати SPF на зиму</div><div><span class="pill core">чекає на тебе</span></div></div>
+            <div class="st-item"><div class="who"><span class="agent"><i></i>writer</span><span>2 год</span></div><div class="what">Переклад сторінки «Про нас» англійською</div><div><span class="pill core">чекає на тебе</span></div></div>
+            <div class="st-item"><div class="who"><span class="agent"><i></i>seo</span><span>22 хв</span></div><div class="what">Meta-описи для 14 статей</div><div><span class="pill">опубліковано авто</span></div></div>
+            <div class="st-item"><div class="who"><span class="agent"><i></i>moderator</span><span>1 год</span></div><div class="what">12 відгуків: 10 схвалено, 2 відхилено</div><div><span class="pill">опубліковано авто</span></div></div>
+          </div>
+          <div class="st-main">
+            <div class="st-meta"><span class="agent"><i></i>writer</span><span>через MCP</span><span>4 зміни</span><span>4 хв тому</span></div>
+            <h3>Нова стаття: Як обрати SPF на зиму</h3>
+            <div class="checks">
+              <span class="pill">✓ Схема</span>
+              <span class="pill">✓ SEO 91/100</span>
+              <span class="pill">✓ Посилання</span>
+              <span class="pill mod">alt-текст додав модуль media</span>
+            </div>
+            <div class="diff">
+              <div class="drow"><div class="fk">title</div><div class="fv add">Як обрати SPF на зиму</div></div>
+              <div class="drow"><div class="fk">slug</div><div class="fv add mono">yak-obraty-spf-na-zymu</div></div>
+              <div class="drow"><div class="fk">body</div><div class="fv add">6 блоків · 640 слів · 1 CTA «Обрати крем»</div></div>
+              <div class="drow"><div class="fk">tags</div><div class="fv"><span class="del">догляд</span> → <span class="add">догляд, зима, spf</span></div></div>
+            </div>
+            <p class="quote">Коментар агента: спирався на три схожі статті, тон за гайдом моделі post.</p>
+            <div class="acts">
+              <button class="btn pri" type="button">Схвалити й опублікувати</button>
+              <button class="btn" type="button">Коментар агенту</button>
+              <button class="btn neg" type="button">Відхилити</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="studio-notes">
+        <div class="plate note"><h3>Форми зі схем</h3><p>Списки, фільтри й редактор блоків з'являються, щойно ти додав модель. Верстати адмінку не треба.</p></div>
+        <div class="plate note"><h3>⌘K розуміє звичайну мову</h3><p>«Знайди статті без обкладинки» перетворюється на <code>post_list</code> з фільтром. Кожну команду видно перед запуском.</p></div>
+        <div class="plate note"><h3>Видно, хто редагує</h3><p>Людина й агент можуть працювати з одним записом одночасно. Курсори й зміни синхронізуються через Yjs.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FRAMEWORKS ================= -->
+  <section class="sec" id="frameworks">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw gate"></span>Фреймворки</span>
+        <h2>Працює з фронтендом, який ти вже знаєш</h2>
+        <p>Кожен адаптер дає типізований клієнт зі схем, компонент <code>&lt;Blocks /&gt;</code>, компонент зображень, live preview і ревалідацію кешу з вебхуків.</p>
+      </div>
+      <div class="fw">
+        <div class="plate fwc"><h3>Next.js</h3><code>@aicms/next</code><p>Server Components, revalidateTag, Draft Mode</p></div>
+        <div class="plate fwc"><h3>Nuxt</h3><code>@aicms/nuxt</code><p>composables, ревалідація через Nitro</p></div>
+        <div class="plate fwc"><h3>SvelteKit</h3><code>@aicms/sveltekit</code><p>load-хелпери, preview</p></div>
+        <div class="plate fwc"><h3>Astro</h3><code>@aicms/astro</code><p>Content Layer loader, SSG і SSR</p></div>
+        <div class="plate fwc"><h3>React Router</h3><code>@aicms/react-router</code><p>loaders для v7 і Remix</p></div>
+        <div class="plate fwc"><h3>Angular</h3><code>@aicms/angular</code><p>сервіси й резолвери</p></div>
+        <div class="plate fwc"><h3>Expo</h3><code>@aicms/expo</code><p>мобільний клієнт з офлайн-кешем</p></div>
+        <div class="plate fwc"><h3>Будь-що інше</h3><code>REST · GraphQL</code><p>Swift, Kotlin, Go, PHP через клієнт з OpenAPI</p></div>
+      </div>
+      <div class="duo">
+        <div class="codecard">
+          <div class="filebar"><span class="fname">app/blog/[slug]/page.tsx</span><span>Next.js</span></div>
+<pre class="code"><span class="k">import</span> { cms, Blocks } <span class="k">from</span> <span class="s">"@aicms/next"</span>
+
+<span class="k">export default async function</span> <span class="f">Post</span>({ params }) {
+  <span class="c">// тип виведено з models/post.ts</span>
+  <span class="k">const</span> post = <span class="k">await</span> cms.post.<span class="f">get</span>({ slug: params.slug })
+
+  <span class="k">return</span> (
+    &lt;<span class="f">article</span>&gt;
+      &lt;<span class="f">h1</span>&gt;{post.title}&lt;/<span class="f">h1</span>&gt;
+      &lt;<span class="f">Blocks</span> value={post.body} /&gt;
+    &lt;/<span class="f">article</span>&gt;
+  )
+}</pre>
+        </div>
+        <div class="plate deploy">
+          <div><b>Вбудований</b><span>AICMS монтується як route handler усередині Next.js, Nuxt або SvelteKit. Один репозиторій, один деплой.</span></div>
+          <div><b>Окремий сервер</b><span><code>aicms start</code> або Docker-образ. Кілька фронтендів читають один контент.</span></div>
+          <div><b>Edge</b><span>Cloudflare Workers + D1 + R2. Ядро на веб-стандартах, тому окремої збірки не потрібно.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= COMPARE ================= -->
+  <section class="sec" id="compare">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw ink"></span>Порівняння</span>
+        <h2>Що змінюється після WordPress</h2>
+      </div>
+      <div class="plate scroll">
+        <table class="cmp">
+          <thead><tr><th></th><th>WordPress</th><th>AICMS</th></tr></thead>
+          <tbody>
+            <tr><th>Структура</th><td>тисячі файлів ядра, тема, плагіни, functions.php</td><td>один пакет; проєкт = конфіг + моделі</td></tr>
+            <tr><th>Дані</th><td>wp_posts + wp_postmeta (EAV)</td><td>типізовані моделі, шість таблиць ядра</td></tr>
+            <tr><th>Розширення</th><td>глобальні хуки з пріоритетами, конфлікти плагінів</td><td>модулі з provides / requires та ізоляцією</td></tr>
+            <tr><th>API</th><td>REST доданий пізніше, покриває не все</td><td>кожен Action одразу доступний у REST і MCP</td></tr>
+            <tr><th>AI-агенти</th><td>плагіни або робота через адмінку</td><td>нативний MCP, scopes, changesets</td></tr>
+            <tr><th>Права</th><td>роль адміністратора відкриває все</td><td>права до поля, бюджети, рев'ю</td></tr>
+            <tr><th>Історія</th><td>ревізії лише для записів</td><td>журнал подій для всього, відкат будь-чого</td></tr>
+            <tr><th>Фронтенд</th><td>PHP-теми</td><td>будь-який фреймворк, типізований SDK</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ROADMAP ================= -->
+  <section class="sec" id="roadmap">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="tag"><span class="sw ink"></span>План</span>
+        <h2>Від ядра до екосистеми</h2>
+        <p>Кожна фаза закінчується чимось, чим можна користуватися.</p>
+      </div>
+      <div class="road">
+        <div class="plate ph"><span class="n">Фаза 0 · триває</span><h3>Ядро</h3><ul><li>Schema Engine</li><li>Action Bus і політики</li><li>Changesets і журнал подій</li><li>SQLite-сховище</li><li>REST і MCP</li><li>CLI</li></ul><p class="res">Агент пише чернетки через MCP, людина їх мерджить</p></div>
+        <div class="plate ph"><span class="n">Фаза 1</span><h3>Людина в контурі</h3><ul><li>Studio MVP і «Вхідні»</li><li>Відкат з журналу</li><li>SDK для TypeScript і Python</li><li>Адаптери Next.js, Astro</li></ul><p class="res">Перший реальний сайт</p></div>
+        <div class="plate ph"><span class="n">Фаза 2</span><h3>Lego</h3><ul><li>SDK модулів, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>Модуль git-sync</li><li>Агенти пропонують модулі через «Вхідні»</li><li>Nuxt, SvelteKit</li></ul><p class="res">Екосистема модулів починає рости</p></div>
+        <div class="plate ph"><span class="n">Фаза 3</span><h3>Масштаб</h3><ul><li>Postgres і edge</li><li>Спільне редагування</li><li>Реєстр модулів, A2A</li><li>commerce</li></ul><p class="res">Продакшн для магазинів і медіа</p></div>
+      </div>
+      <div class="duo">
+        <div class="plate note">
+          <h3>Стек ядра</h3>
+          <ul class="rows">
+            <li><code>TypeScript</code><span>типи наскрізно від схеми до фронтенду</span></li>
+            <li><code>node:sqlite</code><span>вбудований у Node 22, без нативних збірок</span></li>
+            <li><code>Hono</code><span>HTTP на будь-якому рантаймі</span></li>
+            <li><code>Zod 4</code><span>валідація і JSON Schema для агентів</span></li>
+            <li><code>MCP SDK</code><span>офіційний, Streamable HTTP і stdio</span></li>
+            <li><code>React</code><span>Studio, анімації на Framer Motion</span></li>
+            <li><code>Yjs</code><span>спільне редагування людей і агентів</span></li>
+          </ul>
+        </div>
+        <div class="plate note">
+          <h3>Рішення</h3>
+          <ul class="rows">
+            <li><code>сховище</code><span>Джерело правди — база. Модуль git-sync дзеркалить опублікований контент у Markdown-файли і перетворює pull request на changesets.</span></li>
+            <li><code>модулі</code><span>Агент може запропонувати модуль. Пропозиція приходить у «Вхідні» з правами, які він просить, а встановлює людина.</span></li>
+            <li><code>python</code><span>Python SDK виходить у фазі 1 разом з TypeScript.</span></li>
+            <li><code>ліцензія</code><span>Ще відкрито: MIT чи AGPL з комерційною хмарою.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span><b>AICMS</b> · концепт архітектури v0.1</span>
+    <span><a href="https://github.com/malkovych/aicms">GitHub</a> · <a href="../" hreflang="en" lang="en">English</a></span>
+  </div>
+</footer>
+</body>
+</html>
