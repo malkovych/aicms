@@ -67,7 +67,7 @@
         <a class="pri" href="https://github.com/malkovych/aicms">Відкрити на GitHub</a>
         <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.uk.md">Читати специфікацію</a>
       </div>
-      <div class="status"><i></i>Триває фаза 0: ядро, REST і MCP</div>
+      <div class="status"><i></i>Фаза 0 працює: ядро, REST, MCP і CLI. Далі Studio.</div>
     </div>
 
     <div class="demo" aria-label="Одна модель генерує всі інтерфейси">
@@ -591,7 +591,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
 
       <div class="guard">
         <div class="plate note"><span class="sw gate"></span><h3>Права до поля</h3><p><code>post:update.seo</code> дозволяє міняти лише SEO-поля. Решти моделі навіть немає в схемі інструмента.</p></div>
-        <div class="plate note"><span class="sw human"></span><h3>Режим рев'ю</h3><p><code>human</code>, <code>auto</code> або <code>none</code> для кожного агента окремо. Новим агентам за замовчуванням <code>human</code>.</p></div>
+        <div class="plate note"><span class="sw human"></span><h3>Режим рев'ю</h3><p><code>human</code> або <code>auto</code> для кожного агента окремо. Новим агентам за замовчуванням <code>human</code>.</p></div>
         <div class="plate note"><span class="sw core"></span><h3>Бюджети</h3><p>Ліміти дій на годину і розміру changeset. Перевищення ставить агента на паузу до нового вікна.</p></div>
         <div class="plate note"><span class="sw gate"></span><h3>Kill switch</h3><p>Одна команда відкликає токени агента і відхиляє всі його незмерджені зміни.</p></div>
       </div>
@@ -741,7 +741,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
         <p>Кожна фаза закінчується чимось, чим можна користуватися.</p>
       </div>
       <div class="road">
-        <div class="plate ph"><span class="n">Фаза 0 · триває</span><h3>Ядро</h3><ul><li>Schema Engine</li><li>Action Bus і політики</li><li>Changesets і журнал подій</li><li>SQLite-сховище</li><li>REST і MCP</li><li>CLI</li></ul><p class="res">Агент пише чернетки через MCP, людина їх мерджить</p></div>
+        <div class="plate ph"><span class="n">Фаза 0 · готово</span><h3>Ядро</h3><ul><li>Schema Engine</li><li>Action Bus і політики</li><li>Changesets і журнал подій</li><li>SQLite-сховище</li><li>REST і MCP</li><li>CLI</li></ul><p class="res">Агент пише чернетки через MCP, людина їх мерджить</p></div>
         <div class="plate ph"><span class="n">Фаза 1</span><h3>Людина в контурі</h3><ul><li>Studio MVP і «Вхідні»</li><li>Відкат з журналу</li><li>SDK для TypeScript і Python</li><li>Адаптери Next.js, Astro</li></ul><p class="res">Перший реальний сайт</p></div>
         <div class="plate ph"><span class="n">Фаза 2</span><h3>Lego</h3><ul><li>SDK модулів, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>Модуль git-sync</li><li>Агенти пропонують модулі через «Вхідні»</li><li>Nuxt, SvelteKit</li></ul><p class="res">Екосистема модулів починає рости</p></div>
         <div class="plate ph"><span class="n">Фаза 3</span><h3>Масштаб</h3><ul><li>Postgres і edge</li><li>Спільне редагування</li><li>Реєстр модулів, A2A</li><li>commerce</li></ul><p class="res">Продакшн для магазинів і медіа</p></div>

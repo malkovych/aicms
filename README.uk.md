@@ -4,7 +4,7 @@
 
 [Сайт](https://malkovych.github.io/aicms/uk/) · [Архітектура](ARCHITECTURE.uk.md) · [English](README.md)
 
-> Статус: фаза 0. Ядро (схеми, Action Bus, changesets, SQLite, REST, MCP, CLI) будується в цьому репозиторії. Далі Studio, SDK і адаптери фреймворків.
+> Статус: фаза 0 працює. Ядро (схеми, Action Bus, changesets, SQLite, REST, MCP, CLI) лежить у цьому репозиторії й покрите тестами. Далі Studio, SDK і адаптери фреймворків.
 
 ## Навіщо
 

@@ -67,7 +67,7 @@
         <a class="pri" href="https://github.com/malkovych/aicms">View on GitHub</a>
         <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.md">Read the spec</a>
       </div>
-      <div class="status"><i></i>Phase 0 in progress: kernel, REST and MCP</div>
+      <div class="status"><i></i>Phase 0 works: kernel, REST, MCP and CLI. Studio is next.</div>
     </div>
 
     <div class="demo" aria-label="One model generates every interface">
@@ -591,7 +591,7 @@ Snow reflects up to 80% of UV rays.
 
       <div class="guard">
         <div class="plate note"><span class="sw gate"></span><h3>Field-level scopes</h3><p><code>post:update.seo</code> lets an agent change SEO fields only. The rest of the model isn't even in its tool schema.</p></div>
-        <div class="plate note"><span class="sw human"></span><h3>Review mode</h3><p><code>human</code>, <code>auto</code> or <code>none</code>, per agent. New agents default to <code>human</code>.</p></div>
+        <div class="plate note"><span class="sw human"></span><h3>Review mode</h3><p><code>human</code> or <code>auto</code>, per agent. New agents default to <code>human</code>.</p></div>
         <div class="plate note"><span class="sw core"></span><h3>Budgets</h3><p>Limits on actions per hour and on changeset size. Going over pauses the agent until the window resets.</p></div>
         <div class="plate note"><span class="sw gate"></span><h3>Kill switch</h3><p>One command revokes the agent's tokens and rejects every change it hasn't had merged.</p></div>
       </div>
@@ -741,7 +741,7 @@ Snow reflects up to 80% of UV rays.
         <p>Every phase ends with something you can use.</p>
       </div>
       <div class="road">
-        <div class="plate ph"><span class="n">Phase 0 · in progress</span><h3>Kernel</h3><ul><li>Schema Engine</li><li>Action Bus and policies</li><li>Changesets and event log</li><li>SQLite storage</li><li>REST and MCP</li><li>CLI</li></ul><p class="res">An agent drafts content over MCP, a person merges it</p></div>
+        <div class="plate ph"><span class="n">Phase 0 · done</span><h3>Kernel</h3><ul><li>Schema Engine</li><li>Action Bus and policies</li><li>Changesets and event log</li><li>SQLite storage</li><li>REST and MCP</li><li>CLI</li></ul><p class="res">An agent drafts content over MCP, a person merges it</p></div>
         <div class="plate ph"><span class="n">Phase 1</span><h3>Human in the loop</h3><ul><li>Studio MVP and Inbox</li><li>Rollback from the log</li><li>TypeScript and Python SDKs</li><li>Next.js and Astro adapters</li></ul><p class="res">The first real site</p></div>
         <div class="plate ph"><span class="n">Phase 2</span><h3>Lego</h3><ul><li>Module SDK, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>git-sync module</li><li>Agents propose modules via Inbox</li><li>Nuxt, SvelteKit</li></ul><p class="res">The module ecosystem starts growing</p></div>
         <div class="plate ph"><span class="n">Phase 3</span><h3>Scale</h3><ul><li>Postgres and edge</li><li>Real-time co-editing</li><li>Module registry, A2A</li><li>commerce</li></ul><p class="res">Production for shops and media</p></div>

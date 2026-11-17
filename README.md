@@ -4,7 +4,7 @@
 
 [Website](https://malkovych.github.io/aicms/) · [Architecture](ARCHITECTURE.md) · [Українською](README.uk.md)
 
-> Status: phase 0. The kernel (schemas, Action Bus, changesets, SQLite, REST, MCP, CLI) is being built in this repository. Studio, SDKs and framework adapters come next.
+> Status: phase 0 works. The kernel (schemas, Action Bus, changesets, SQLite, REST, MCP, CLI) is in this repository and covered by tests. Studio, SDKs and framework adapters come next.
 
 ## Why
 
@@ -85,6 +85,14 @@ node ../../dist/cli.js reject <changeset-id> --comment "Shorter title, please"
 | SQLite store: entries, versions, changesets, events, media, tokens | `src/store/` |
 | REST, OpenAPI, discovery, MCP | `src/gates/` |
 | CLI | `src/cli.ts` |
+
+## Development
+
+```bash
+npm test            # node:test, no build step
+npm run typecheck
+npm run build       # dist/ for the CLI
+```
 
 ## License
 

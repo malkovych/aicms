@@ -3,7 +3,7 @@
 > A CMS where AI agents are first-class users and people are the editors and owners.
 > Describe a model once and get REST, MCP tools, an admin and types.
 
-Status: concept v0.1 · phase 0 (kernel) in progress · [Українською](ARCHITECTURE.uk.md)
+Status: v0.1 · phase 0 works (schemas, Action Bus, changesets, SQLite, REST, MCP, CLI) · [Українською](ARCHITECTURE.uk.md)
 
 ---
 
@@ -83,7 +83,7 @@ There is nothing else to learn.
 ### 4.3 Policy
 - **Scopes:** `post:read`, `post:draft` (create + update), `post:update.seo` (one field), `post:delete`, `post:*`, `changesets:review`, `*`. Module Actions declare their own scopes, e.g. `reviews:write`.
 - **Field-level tool schemas:** a draft tool only lists the fields the agent may write. With `post:update.seo` the agent's `post_draft` tool contains `id` and `seo` and nothing else.
-- **Review mode** per agent: `human` (a person approves), `auto` (merged when every check is green), `none` (trusted agents). The default is `human`.
+- **Review mode** per agent: `human` (a person approves) or `auto` (merged when every check is green and no model requires a person). The default is `human`.
 - **The model has the last word:** if a model's `agent.can` doesn't include `publish`, any agent changeset that touches it waits for a person, whatever the agent's review mode.
 - **Budgets:** `actionsPerHour` and `maxChangesetItems`.
 - **Kill switch:** `aicms agent revoke <name>` revokes the agent's tokens and rejects all its unmerged changesets.
@@ -210,7 +210,7 @@ export default defineModule({
 })
 ```
 
-Inside `run`, `ctx` writes through the caller's changeset, so a module Action can never bypass review.
+Inside `run`, `ctx` writes through the caller's changeset, so a module Action can never bypass review. Its reads include the caller's own drafts, so a module can check work before it is submitted.
 
 ### 6.2 Capabilities instead of package dependencies
 
@@ -255,7 +255,7 @@ An agent only sees what its scopes allow. MCP tool names use underscores (`post_
 | `cms_describe` | `cms.describe` | models, fields, guides, the agent's own scopes and review mode |
 | `cms_search` | `cms.search` | full-text search across readable models |
 | `<model>_list` | `<model>.list` | filter by indexed fields, select fields, paginate |
-| `<model>_get` | `<model>.get` | one entry by `id` or by a unique field such as `slug` |
+| `<model>_get` | `<model>.get` | one entry by `id` or by a unique field such as `slug`; `drafts: true` includes your unpublished changes |
 | `<model>_draft` | `<model>.draft` | create or change an entry inside the agent's changeset |
 | `<model>_delete` | `<model>.delete` | propose deleting an entry |
 | `cms_submit` | `cms.submit` | run checks and send the changeset for review |
@@ -350,7 +350,7 @@ Deployment modes:
 
 | Phase | Scope | Outcome |
 |---|---|---|
-| **0. Kernel** | Schema Engine, Action Bus, policies, changesets, event log, SQLite store, REST, MCP, discovery, webhooks, CLI | an agent drafts content over MCP, a person merges it |
+| **0. Kernel** ✓ | Schema Engine, Action Bus, policies, changesets, event log, SQLite store, REST, MCP, discovery, webhooks, CLI | an agent drafts content over MCP, a person merges it |
 | **1. Human in the loop** | Studio MVP and Inbox, rollback, SSE events, TypeScript and Python SDKs, Next.js and Astro adapters | the first real site |
 | **2. Lego** | module SDK, `aicms add`, official modules (seo, i18n, media, search, git-sync), agents propose modules via Inbox, GraphQL, Nuxt and SvelteKit | the ecosystem starts growing |
 | **3. Scale** | Postgres and edge, real-time presence, module registry, A2A, commerce | production for shops and media |
