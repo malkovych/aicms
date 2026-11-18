@@ -90,7 +90,9 @@ code,.mono{font-family:var(--f-mono);font-size:.88em}
 
 /* ---------- hero ---------- */
 .hero{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:56px;align-items:start;padding-block:64px 80px}
-.wordmark{font-family:var(--f-display);font-weight:800;font-size:clamp(72px,11.5vw,150px);line-height:.88;letter-spacing:-.035em;margin:20px 0 0}
+.hero > div:first-child{container-type:inline-size;min-width:0}
+/* Sized by its own column, not the viewport: "AICMS" is ~4.22em wide in Unbounded 800. */
+.wordmark{font-family:var(--f-display);font-weight:800;font-size:clamp(56px,9vw,130px);font-size:clamp(56px,23cqi,150px);line-height:.88;letter-spacing:-.035em;margin:20px 0 0;white-space:nowrap}
 .wordmark .ai{color:var(--core)}
 .lead{font-family:var(--f-display);font-weight:500;font-size:clamp(20px,2.3vw,27px);line-height:1.28;letter-spacing:-.01em;text-wrap:balance;margin-top:28px;max-width:24ch}
 .hero .body{color:var(--muted);max-width:50ch;margin-top:18px}
@@ -182,7 +184,7 @@ svg.dg{display:block;width:100%;height:auto;min-width:760px;color:var(--ink);fon
 .dg .mid{text-anchor:middle}
 
 .duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:20px}
-.note{padding:22px 24px;display:grid;gap:12px;align-content:start}
+.note{padding:22px 24px;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-content:start}
 .note p{color:var(--muted);font-size:15px}
 .rows{display:grid;margin:0;padding:0;list-style:none}
 .rows li{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;padding:9px 0;border-top:1px solid var(--line);font-size:14.5px}
@@ -249,7 +251,7 @@ svg.dg{display:block;width:100%;height:auto;min-width:760px;color:var(--ink);fon
 .toolt td{padding:8px 0;border-top:1px solid var(--line);vertical-align:top}
 .toolt tr:first-child td{border-top:0}
 .toolt td:first-child{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap;padding-right:16px;color:var(--ink)}
-.toolt td:last-child{color:var(--muted)}
+.toolt td:last-child{color:var(--muted);overflow-wrap:anywhere}
 .mdpair{display:grid;gap:10px}
 .mdpair .codecard pre.code{font-size:12px;padding:14px 16px}
 .mdpair .lab{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-family:var(--f-mono);padding:0 2px}
@@ -332,27 +334,27 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
 
 /* ---------- responsive ---------- */
 @media (max-width:1040px){
-  .hero{grid-template-columns:1fr;gap:44px;padding-block:44px 64px}
+  .hero{grid-template-columns:minmax(0,1fr);gap:44px;padding-block:44px 64px}
   .st-body{grid-template-columns:196px minmax(0,1fr)}
   .st-list{display:none}
   .gates,.fw,.road,.guard{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:860px){
   .principles{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .duo,.lego{grid-template-columns:1fr}
-  .vrow{grid-template-columns:1fr;gap:4px}
-  .studio-notes{grid-template-columns:1fr}
+  .duo,.lego{grid-template-columns:minmax(0,1fr)}
+  .vrow{grid-template-columns:minmax(0,1fr);gap:4px}
+  .studio-notes{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:640px){
   section.sec{padding-block:56px}
-  .principles,.gates,.fw,.road,.guard{grid-template-columns:1fr}
-  .st-body{grid-template-columns:1fr;min-height:0}
+  .principles,.gates,.fw,.road,.guard{grid-template-columns:minmax(0,1fr)}
+  .st-body{grid-template-columns:minmax(0,1fr);min-height:0}
   .st-nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px}
   .st-nav .sp{display:none}
   .st-site{display:none}
   .st-main{padding:18px 16px}
-  .drow{grid-template-columns:1fr}
-  .rows li{grid-template-columns:1fr;gap:2px}
+  .drow{grid-template-columns:minmax(0,1fr)}
+  .rows li{grid-template-columns:minmax(0,1fr);gap:2px}
   .top .wrap{gap:12px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -383,3 +385,19 @@ img{max-width:100%}
 .links{justify-content:flex-start}
 .links a:first-child{margin-left:auto}
 @media (max-width:900px){.top .links{display:none}.top .wrap{justify-content:space-between}}
+@media (max-width:600px){
+  .toolt td:first-child{white-space:normal;overflow-wrap:anywhere;padding-right:10px}
+  .plate.scroll:has(.cmp){overflow-x:visible}
+  .cmp{min-width:0;display:block}
+  .cmp thead{display:none}
+  .cmp tbody,.cmp tr{display:block}
+  .cmp tr{padding:14px 16px;border-top:1px solid var(--line)}
+  .cmp tr:first-child{border-top:0}
+  .cmp th,.cmp td{display:block;border:0;padding:0;width:auto!important}
+  .cmp tbody th{font-family:var(--f-display);font-weight:700;color:var(--ink);font-size:14px;margin-bottom:8px}
+  .cmp td{font-size:14px;padding:8px 10px;border-radius:10px}
+  .cmp td+td{margin-top:6px}
+  .cmp td::before{display:block;font:600 11px/1.4 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+  .cmp td:nth-child(2)::before{content:"WordPress";color:var(--muted)}
+  .cmp td:nth-child(3)::before{content:"AICMS";color:var(--core)}
+}
