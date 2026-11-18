@@ -1,15 +1,51 @@
 import { z } from "zod";
-import { typeLabel } from "../schema/fields.ts";
-import { filterableFields, projectData, uniqueFields, type Model } from "../schema/model.ts";
+import { typeLabel, type AnyField } from "../schema/fields.ts";
+import { displayTitle, filterableFields, projectData, uniqueFields, type Model } from "../schema/model.ts";
 import type { EntryRow } from "../store/types.ts";
 import type { RegisteredAction } from "./action.ts";
-import { diffChangeset, mergeChangeset, rejectChangeset, submitChangeset, summarize } from "./changesets.ts";
+import {
+  diffChangeset,
+  discardDrafts,
+  entryHistory,
+  entryVersion,
+  mergeChangeset,
+  rejectChangeset,
+  restoreEntry,
+  revertChangeset,
+  submitChangeset,
+  summarize,
+} from "./changesets.ts";
 import { AicmsError } from "./errors.ts";
 import { allows, modelPermissions, type Actor } from "./policy.ts";
 import type { Kernel } from "./cms.ts";
 
 const signedIn = (a: Actor) => a.kind !== "public";
 const reviewer = (a: Actor) => allows(a.scopes, "changesets:review");
+const manager = (a: Actor) => allows(a.scopes, "agents:manage");
+const auditor = (a: Actor) => allows(a.scopes, "events:read");
+
+/** A field as clients need it to render a form or write valid input. */
+export function describeField(name: string, f: AnyField, writable?: boolean): Record<string, unknown> {
+  const o = f.options;
+  return {
+    name,
+    kind: f.kind,
+    type: typeLabel(f),
+    ...(o.required ? { required: true } : {}),
+    ...(o.unique ? { unique: true } : {}),
+    ...(o.label ? { label: o.label } : {}),
+    ...(o.description ? { description: o.description } : {}),
+    ...(f.kind === "slug" && o.from ? { filledFrom: o.from } : {}),
+    ...(o.min !== undefined ? { min: o.min } : {}),
+    ...(o.max !== undefined ? { max: o.max } : {}),
+    ...(o.multiline ? { multiline: true } : {}),
+    ...(f.kind === "enum" ? { values: o.values } : {}),
+    ...(f.kind === "ref" ? { model: o.model, ...(o.many ? { many: true } : {}) } : {}),
+    ...(f.kind === "blocks" && o.types ? { blocks: o.types } : {}),
+    ...(f.kind === "object" ? { fields: Object.entries(o.fields as Record<string, AnyField>).map(([k, sub]) => describeField(k, sub)) } : {}),
+    ...(writable !== undefined ? { writable } : {}),
+  };
+}
 
 function abilities(actor: Actor, m: Model): string[] {
   const p = modelPermissions(actor, m);
@@ -22,13 +58,6 @@ function abilities(actor: Actor, m: Model): string[] {
   return out;
 }
 
-/** The text a person would read as the entry's name. */
-export function displayTitle(m: Model, data: Record<string, unknown>): string {
-  const textual = Object.entries(m.fields).filter(([, f]) => f.kind === "text");
-  const preferred = textual.find(([, f]) => f.options.required) ?? textual[0];
-  const value = preferred ? data[preferred[0]] : undefined;
-  return typeof value === "string" && value ? value : "";
-}
 
 async function resolveExamples(k: Kernel, m: Model): Promise<Record<string, unknown>[]> {
   const out: Record<string, unknown>[] = [];
@@ -61,15 +90,7 @@ export function coreActions(): RegisteredAction[] {
             guide: m.agent?.guide,
             youCan: abilities(actor, m),
             humanPublishes: !!m.agent?.can && !m.agent.can.includes("publish"),
-            fields: Object.entries(m.fields).map(([key, f]) => ({
-              name: key,
-              type: typeLabel(f),
-              ...(f.options.required ? { required: true } : {}),
-              ...(f.options.unique ? { unique: true } : {}),
-              ...(f.options.description || f.options.label ? { description: f.options.description ?? f.options.label } : {}),
-              ...(f.kind === "slug" && f.options.from ? { filledFrom: f.options.from } : {}),
-              writable: p.create || p.updateFields.includes(key),
-            })),
+            fields: Object.entries(m.fields).map(([key, f]) => describeField(key, f, p.create || p.updateFields.includes(key))),
             filterBy: filterableFields(m),
             findBy: ["id", ...uniqueFields(m)],
             examples: await resolveExamples(k, m),
@@ -144,6 +165,13 @@ export function coreActions(): RegisteredAction[] {
       run: (input: { note?: string }, { actor, kernel }) => submitChangeset(kernel, actor, input.note),
     },
     {
+      name: "cms.discard",
+      description: "Drop drafted changes you haven't submitted: one entry with { id }, or all of them without it.",
+      visible: signedIn,
+      schema: () => z.strictObject({ id: z.string().min(1).optional() }),
+      run: (input: { id?: string }, { actor, kernel }) => discardDrafts(kernel, actor, input.id),
+    },
+    {
       name: "cms.changes",
       description: "Your recent changesets: status, failed checks and reviewer comments. Use it to learn whether your changes were merged or sent back.",
       readOnly: true,
@@ -194,6 +222,107 @@ export function coreActions(): RegisteredAction[] {
         }),
       run: (input: { id: string; comment: string; final?: boolean }, { actor, kernel }) =>
         rejectChangeset(kernel, input.id, actor.id, input.comment, input.final),
+    },
+    {
+      name: "cms.history",
+      description: "Versions of one entry, newest first: who changed it, when, in which changeset and which fields. Pass { version } to read that version's data.",
+      readOnly: true,
+      visible: signedIn,
+      schema: () =>
+        z.strictObject({
+          id: z.string().min(1),
+          version: z.number().int().min(1).optional(),
+          format: z.enum(["markdown", "blocks"]).optional(),
+        }),
+      async run(input: { id: string; version?: number; format?: "markdown" | "blocks" }, { actor, gate, kernel }) {
+        if (input.version === undefined) return entryHistory(kernel, actor, input.id);
+        const v = await entryVersion(kernel, actor, input.id, input.version);
+        const m = kernel.models.get(v.model)!;
+        const format = input.format ?? (gate === "mcp" ? "markdown" : "blocks");
+        return { ...v, data: v.data ? projectData(m, v.data, format) : null };
+      },
+    },
+    {
+      name: "cms.restore",
+      description: "Draft a change that brings an entry back to an earlier version (a deleted entry comes back with the same id). Publish it with cms_submit like any other change.",
+      visible: signedIn,
+      schema: () => z.strictObject({ id: z.string().min(1), version: z.number().int().min(1) }),
+      run: (input: { id: string; version: number }, { actor, kernel }) => restoreEntry(kernel, actor, input.id, input.version),
+    },
+    {
+      name: "cms.revert",
+      description: "Draft the undo of a merged changeset: entries it created are deleted, edits and deletions are rolled back. Publish it with cms_submit.",
+      visible: signedIn,
+      schema: () => z.strictObject({ changeset: z.string().min(1) }),
+      run: (input: { changeset: string }, { actor, kernel }) => revertChangeset(kernel, actor, input.changeset),
+    },
+    {
+      name: "cms.agents",
+      description: "For admins: configured agents with their scopes, review mode, budget, active tokens, recent activity and pending changesets.",
+      readOnly: true,
+      visible: manager,
+      schema: () => z.strictObject({}),
+      async run(_input: Record<string, never>, { kernel: k }) {
+        const tokens = await k.store.listTokens();
+        const stats = new Map((await k.store.actorStats(new Date(Date.now() - 3_600_000).toISOString())).map((s) => [s.actor, s]));
+        const pending = await k.store.listChangesets({ status: ["open", "submitted"], limit: 1000 });
+        return {
+          agents: Object.entries(k.config.agents).map(([name, a]) => {
+            const mine = pending.filter((cs) => cs.actor === name);
+            return {
+              name,
+              ...(a.description ? { description: a.description } : {}),
+              scopes: a.scopes,
+              review: a.review ?? "human",
+              ...(a.budget ? { budget: a.budget } : {}),
+              tokens: tokens.filter((t) => t.agent === name && t.kind === "agent" && !t.revokedAt).length,
+              lastSeen: stats.get(name)?.lastAt ?? null,
+              actionsLastHour: stats.get(name)?.recent ?? 0,
+              waiting: mine.filter((cs) => cs.status === "submitted").length,
+              drafting: mine.find((cs) => cs.status === "open")?.items.length ?? 0,
+            };
+          }),
+          sessions: tokens.filter((t) => t.kind === "session" && !t.revokedAt && (!t.expiresAt || t.expiresAt > new Date().toISOString())).length,
+        };
+      },
+    },
+    {
+      name: "cms.token",
+      description: "For admins: issue a new token for an agent from the config. The token is shown once.",
+      visible: manager,
+      schema: () => z.strictObject({ agent: z.string().min(1) }),
+      async run(input: { agent: string }, { kernel: k }) {
+        if (input.agent === "owner") throw new AicmsError("invalid", "Owner tokens are issued from the command line: aicms agent create owner");
+        const token = await k.createToken(input.agent);
+        const a = k.actor(input.agent);
+        return { agent: input.agent, token, scopes: a.scopes, review: a.review, next: "Store it now; it can't be shown again." };
+      },
+    },
+    {
+      name: "cms.revoke",
+      description: "For admins: revoke every token of an agent and reject its unmerged changesets.",
+      destructive: true,
+      visible: manager,
+      schema: () => z.strictObject({ agent: z.string().min(1) }),
+      async run(input: { agent: string }, { kernel: k }) {
+        if (!(input.agent in k.config.agents)) throw new AicmsError("not_found", `No agent "${input.agent}"`);
+        return { agent: input.agent, ...(await k.revokeAgent(input.agent)) };
+      },
+    },
+    {
+      name: "cms.log",
+      description: "For admins: the action log, newest first. Filter by actor; page back with { before: <id of the oldest event you have> }.",
+      readOnly: true,
+      visible: auditor,
+      schema: () =>
+        z.strictObject({
+          actor: z.string().optional(),
+          limit: z.number().int().min(1).max(200).optional().describe("Default 50"),
+          before: z.number().int().min(1).optional(),
+        }),
+      async run(input: { actor?: string; limit?: number; before?: number }, { kernel }) {
+        return { events: await kernel.store.listEvents({ actor: input.actor, limit: input.limit ?? 50, before: input.before }) };
+      },
     },
   ];
 }

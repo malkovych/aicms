@@ -1,0 +1,25 @@
+{
+  "name": "@aicms/studio",
+  "version": "0.2.0",
+  "private": true,
+  "description": "AICMS Studio: the admin for people. Built into the aicms package at dist/studio.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@aicms/client": "^0.2.0",
+    "@fontsource-variable/geologica": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/unbounded": "^5.3.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "framer-motion": "^14.14.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.8"
+  }
+}

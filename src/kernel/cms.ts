@@ -25,6 +25,26 @@ export interface ToolInfo {
 
 type Handler = (event: string, payload: unknown) => void | Promise<void>;
 
+/** One item of the live feed behind `/api/v1/events`. `action` items mirror the action log. */
+export interface FeedEvent {
+  id: number;
+  event: string;
+  payload: any;
+  at: string;
+}
+
+export interface Feed {
+  /** Buffered events after `id` (the last few hundred, for reconnecting clients). */
+  since(id?: number): FeedEvent[];
+  /** Id of the newest event so far (0 before any). */
+  lastId(): number;
+  subscribe(fn: (e: FeedEvent) => void): () => void;
+}
+
+const FEED_SIZE = 500;
+const LOGIN_TTL_MS = 15 * 60_000;
+const SESSION_TTL_MS = 30 * 24 * 3_600_000;
+
 export interface Kernel {
   readonly config: ResolvedConfig;
   readonly store: Store;
@@ -41,8 +61,14 @@ export interface Kernel {
   resolveToken(token: string | null | undefined): Promise<Actor>;
   createToken(agent: string): Promise<string>;
   revokeAgent(agent: string): Promise<{ tokens: number; changesets: number }>;
+  /** A one-time code for a Studio sign-in link, valid for 15 minutes. */
+  createLoginCode(): Promise<string>;
+  /** Trade a login code for a 30-day owner session token. */
+  startSession(code: string): Promise<{ token: string; expiresAt: string }>;
+  endSession(token: string): Promise<void>;
   on(event: string, handler: Handler): () => void;
   emit(event: string, payload: unknown): Promise<void>;
+  readonly feed: Feed;
   close(): Promise<void>;
 }
 
@@ -64,6 +90,29 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
   const models = new Map<string, Model>();
   const actions = new Map<string, RegisteredAction>();
   const handlers = new Map<string, Set<Handler>>();
+  const buffer: FeedEvent[] = [];
+  const subscribers = new Set<(e: FeedEvent) => void>();
+  let seq = 0;
+  const publish = (event: string, payload: unknown) => {
+    const item: FeedEvent = { id: ++seq, event, payload, at: new Date().toISOString() };
+    buffer.push(item);
+    if (buffer.length > FEED_SIZE) buffer.shift();
+    for (const fn of subscribers) {
+      try {
+        fn(item);
+      } catch {
+        /* a broken subscriber must not break the caller */
+      }
+    }
+  };
+  const feed: Feed = {
+    since: (id = 0) => buffer.filter((e) => e.id > id),
+    lastId: () => seq,
+    subscribe(fn) {
+      subscribers.add(fn);
+      return () => subscribers.delete(fn);
+    },
+  };
 
   const addModel = (m: Model, source: string) => {
     if (!isModel(m)) throw new Error(`${source} contains something that wasn't made with defineModel()`);
@@ -112,17 +161,18 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
         error = e instanceof Error ? e.message : String(e);
         throw e;
       } finally {
-        // Anonymous reads would flood the log; everything else is recorded.
-        if (!(actor.kind === "public" && !error)) {
+        // Anonymous reads and Studio's own page loads would flood the log; everything else is recorded.
+        const quiet = !error && (actor.kind === "public" || (gate === "studio" && action?.readOnly));
+        if (!quiet) {
           let logged: string | undefined;
           try {
             logged = rawInput === undefined ? undefined : JSON.stringify(rawInput).slice(0, 2000);
           } catch {
             logged = undefined;
           }
-          await store
-            .logEvent({ at: new Date().toISOString(), actor: actor.id, gate, action: name, input: logged, ok: !error, error, ms: Date.now() - started })
-            .catch(() => {});
+          const ms = Date.now() - started;
+          await store.logEvent({ at: new Date().toISOString(), actor: actor.id, gate, action: name, input: logged, ok: !error, error, ms }).catch(() => {});
+          publish("action", { actor: actor.id, gate, action: name, ok: !error, ...(error ? { error } : {}), ms });
         }
       }
     },
@@ -150,8 +200,9 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
 
     async resolveToken(token) {
       if (!token) return kernel.actor("public");
-      const row = await store.findToken(hashToken(token));
-      if (!row) throw new AicmsError("unauthorized", "Invalid or revoked token");
+      const row = await store.findToken(hashToken(token), new Date().toISOString());
+      if (!row) throw new AicmsError("unauthorized", "Invalid, expired or revoked token");
+      if (row.kind === "login") throw new AicmsError("unauthorized", "This is a one-time Studio sign-in code; open the sign-in link instead");
       try {
         return kernel.actor(row.agent);
       } catch {
@@ -165,6 +216,30 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
       const token = `aicms_${randomBytes(24).toString("base64url")}`;
       await store.createToken({ id: newId("tk"), agent, hash: hashToken(token), createdAt: new Date().toISOString() });
       return token;
+    },
+
+    async createLoginCode() {
+      const code = randomBytes(24).toString("base64url");
+      const at = new Date();
+      await store.createToken({ id: newId("lg"), agent: "owner", hash: hashToken(code), createdAt: at.toISOString(), kind: "login", expiresAt: new Date(at.getTime() + LOGIN_TTL_MS).toISOString() });
+      return code;
+    },
+
+    async startSession(code) {
+      const at = new Date();
+      const row = code ? await store.findToken(hashToken(code), at.toISOString()) : null;
+      if (!row || row.kind !== "login") throw new AicmsError("unauthorized", "This sign-in link is invalid or expired. Run `aicms login` for a new one.");
+      // Single use: a second click on the same link fails.
+      if (!(await store.revokeToken(row.id, at.toISOString()))) throw new AicmsError("unauthorized", "This sign-in link was already used");
+      const token = `aicms_${randomBytes(24).toString("base64url")}`;
+      const expiresAt = new Date(at.getTime() + SESSION_TTL_MS).toISOString();
+      await store.createToken({ id: newId("ss"), agent: row.agent, hash: hashToken(token), createdAt: at.toISOString(), kind: "session", expiresAt });
+      return { token, expiresAt };
+    },
+
+    async endSession(token) {
+      const row = await store.findToken(hashToken(token), new Date().toISOString());
+      if (row?.kind === "session") await store.revokeToken(row.id, new Date().toISOString());
     },
 
     async revokeAgent(agent) {
@@ -181,6 +256,7 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
     },
 
     async emit(event, payload) {
+      publish(event, payload);
       for (const h of [...(handlers.get(event) ?? []), ...(handlers.get("*") ?? [])]) {
         try {
           await h(event, payload);
@@ -199,6 +275,7 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
       }
     },
 
+    feed,
     close: () => store.close(),
   };
 

@@ -1,0 +1,19 @@
+{
+  "name": "@aicms/client",
+  "version": "0.2.0",
+  "description": "Typed client for AICMS: REST actions, live events and a safe blocks-to-HTML renderer. No dependencies.",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/malkovych/aicms.git", "directory": "packages/client" },
+  "homepage": "https://malkovych.github.io/aicms/",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": { "build": "tsc -b" }
+}

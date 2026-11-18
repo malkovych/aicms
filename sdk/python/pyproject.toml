@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aicms"
+version = "0.2.0"
+description = "Python client for AICMS, the CMS for AI agents. No dependencies."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [{ name = "malkovych" }]
+keywords = ["cms", "ai", "agents", "mcp", "headless"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://malkovych.github.io/aicms/"
+Source = "https://github.com/malkovych/aicms"
+
+[tool.hatch.build.targets.wheel]
+packages = ["aicms"]

@@ -50,6 +50,19 @@ export const isModel = (v: unknown): v is Model => !!v && typeof v === "object" 
 
 // ---------- runtime helpers ----------
 
+/** The field a person reads as an entry's name: the first required text field, else the first text field. */
+export function titleField(m: Model): string | undefined {
+  const textual = Object.entries(m.fields).filter(([, f]) => f.kind === "text");
+  return (textual.find(([, f]) => f.options.required) ?? textual[0])?.[0];
+}
+
+/** The text a person would read as the entry's name. */
+export function displayTitle(m: Model, data: Record<string, unknown>): string {
+  const key = titleField(m);
+  const value = key ? data[key] : undefined;
+  return typeof value === "string" && value ? value : "";
+}
+
 export function uniqueFields(m: Model): string[] {
   return Object.entries(m.fields).filter(([, f]) => f.options.unique).map(([k]) => k);
 }

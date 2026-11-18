@@ -299,7 +299,8 @@ svg.dg{display:block;width:100%;height:auto;min-width:760px;color:var(--ink);fon
 /* frameworks */
 .fw{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .fwc{padding:18px;display:grid;gap:6px;align-content:start}
-.fwc h3{font-size:16px}
+.fwc h3{font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fwc .ready{font:600 11px/1 var(--f-body);padding:4px 8px;border-radius:99px;background:var(--human-tint);color:var(--human)}
 .fwc code{color:var(--gate);font-size:12px}
 .fwc p{font-size:13.5px;color:var(--muted)}
 .deploy{display:grid;gap:0;padding:6px 22px}

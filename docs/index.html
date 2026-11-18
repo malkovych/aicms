@@ -47,7 +47,7 @@
   <!-- ================= HERO ================= -->
   <div class="wrap hero">
     <div>
-      <div class="eyebrow">Architecture concept · v0.1 · November 2026</div>
+      <div class="eyebrow">Open source · MIT · v0.2 · November 2026</div>
       <h1 class="wordmark"><span class="ai">AI</span>CMS</h1>
       <p class="lead">A CMS where AI agents work with content as naturally as people do.</p>
       <p class="body">Describe a model once. AICMS generates the API, MCP tools for agents, an admin for people and types for your frontend. Modules snap in like bricks, and every change an agent makes is reviewed and can be rolled back in one click.</p>
@@ -67,7 +67,7 @@
         <a class="pri" href="https://github.com/malkovych/aicms">View on GitHub</a>
         <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.md">Read the spec</a>
       </div>
-      <div class="status"><i></i>Phase 0 works: kernel, REST, MCP and CLI. Studio is next.</div>
+      <div class="status"><i></i>Phase 1 works: Studio with Inbox, rollback, live events, TypeScript and Python SDKs, Next.js and Astro.</div>
     </div>
 
     <div class="demo" aria-label="One model generates every interface">
@@ -125,13 +125,13 @@
 <span class="c"># 422 naming the field if data fails the schema</span></pre>
       </div>
       <div class="panel" role="tabpanel" id="p-sdk" aria-labelledby="t-sdk" hidden>
-<pre class="code"><span class="k">import</span> { cms } <span class="k">from</span> <span class="s">"@aicms/next"</span>
+<pre class="code"><span class="k">import</span> { cms } <span class="k">from</span> <span class="s">"@/lib/cms"</span>  <span class="c">// createAicms&lt;Schema&gt;() from @aicms/next</span>
 
 <span class="k">const</span> post = <span class="k">await</span> cms.post.<span class="f">get</span>({ slug: <span class="s">"how-to-choose-spf"</span> })
 
 post.title   <span class="c">// string</span>
 post.cover   <span class="c">// Media { url, alt, width, height }</span>
-post.body    <span class="c">// Block&lt;"paragraph" | "image" | "cta"&gt;[]</span>
+post.body    <span class="c">// Block[]</span>
 post.author  <span class="c">// type error before anything runs:</span>
              <span class="c">// model post has no such field</span></pre>
       </div>
@@ -672,10 +672,10 @@ Snow reflects up to 80% of UV rays.
         <p>Every adapter gives you a client typed from your schemas, a <code>&lt;Blocks /&gt;</code> component, an image component, live preview and cache revalidation from webhooks.</p>
       </div>
       <div class="fw">
-        <div class="plate fwc"><h3>Next.js</h3><code>@aicms/next</code><p>Server Components, revalidateTag, Draft Mode</p></div>
+        <div class="plate fwc"><h3>Next.js <span class="ready">ready</span></h3><code>@aicms/next</code><p>Server Components, revalidateTag, &lt;Blocks /&gt;</p></div>
         <div class="plate fwc"><h3>Nuxt</h3><code>@aicms/nuxt</code><p>composables, revalidation through Nitro</p></div>
         <div class="plate fwc"><h3>SvelteKit</h3><code>@aicms/sveltekit</code><p>load helpers, preview</p></div>
-        <div class="plate fwc"><h3>Astro</h3><code>@aicms/astro</code><p>Content Layer loader, SSG and SSR</p></div>
+        <div class="plate fwc"><h3>Astro <span class="ready">ready</span></h3><code>@aicms/astro</code><p>Content Layer loader, SSG and SSR</p></div>
         <div class="plate fwc"><h3>React Router</h3><code>@aicms/react-router</code><p>loaders for v7 and Remix</p></div>
         <div class="plate fwc"><h3>Angular</h3><code>@aicms/angular</code><p>services and resolvers</p></div>
         <div class="plate fwc"><h3>Expo</h3><code>@aicms/expo</code><p>mobile client with an offline cache</p></div>
@@ -684,11 +684,12 @@ Snow reflects up to 80% of UV rays.
       <div class="duo">
         <div class="codecard">
           <div class="filebar"><span class="fname">app/blog/[slug]/page.tsx</span><span>Next.js</span></div>
-<pre class="code"><span class="k">import</span> { cms, Blocks } <span class="k">from</span> <span class="s">"@aicms/next"</span>
+<pre class="code"><span class="k">import</span> { Blocks } <span class="k">from</span> <span class="s">"@aicms/next"</span>
+<span class="k">import</span> { cms } <span class="k">from</span> <span class="s">"@/lib/cms"</span>
 
 <span class="k">export default async function</span> <span class="f">Post</span>({ params }) {
-  <span class="c">// type inferred from models/post.ts</span>
-  <span class="k">const</span> post = <span class="k">await</span> cms.post.<span class="f">get</span>({ slug: params.slug })
+  <span class="c">// typed by `aicms types` from models/post.ts</span>
+  <span class="k">const</span> post = <span class="k">await</span> cms.post.<span class="f">get</span>({ slug: (<span class="k">await</span> params).slug })
 
   <span class="k">return</span> (
     &lt;<span class="f">article</span>&gt;
@@ -742,7 +743,7 @@ Snow reflects up to 80% of UV rays.
       </div>
       <div class="road">
         <div class="plate ph"><span class="n">Phase 0 · done</span><h3>Kernel</h3><ul><li>Schema Engine</li><li>Action Bus and policies</li><li>Changesets and event log</li><li>SQLite storage</li><li>REST and MCP</li><li>CLI</li></ul><p class="res">An agent drafts content over MCP, a person merges it</p></div>
-        <div class="plate ph"><span class="n">Phase 1</span><h3>Human in the loop</h3><ul><li>Studio MVP and Inbox</li><li>Rollback from the log</li><li>TypeScript and Python SDKs</li><li>Next.js and Astro adapters</li></ul><p class="res">The first real site</p></div>
+        <div class="plate ph"><span class="n">Phase 1 · done</span><h3>Human in the loop</h3><ul><li>Studio: Inbox, Content, Agents, Activity</li><li>Rollback: restore a version, undo a changeset</li><li>Live events over SSE</li><li>TypeScript and Python SDKs</li><li>Next.js and Astro adapters</li></ul><p class="res">The first real site</p></div>
         <div class="plate ph"><span class="n">Phase 2</span><h3>Lego</h3><ul><li>Module SDK, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>git-sync module</li><li>Agents propose modules via Inbox</li><li>Nuxt, SvelteKit</li></ul><p class="res">The module ecosystem starts growing</p></div>
         <div class="plate ph"><span class="n">Phase 3</span><h3>Scale</h3><ul><li>Postgres and edge</li><li>Real-time co-editing</li><li>Module registry, A2A</li><li>commerce</li></ul><p class="res">Production for shops and media</p></div>
       </div>
@@ -764,7 +765,7 @@ Snow reflects up to 80% of UV rays.
           <ul class="rows">
             <li><code>storage</code><span>The database is the source of truth. A git-sync module mirrors published content to Markdown files and turns pull requests into changesets.</span></li>
             <li><code>modules</code><span>Agents may propose a module. The proposal lands in Inbox with the permissions it asks for, and a person installs it.</span></li>
-            <li><code>python</code><span>The Python SDK ships in phase 1, together with the TypeScript one.</span></li>
+            <li><code>python</code><span>The Python SDK shipped in phase 1, together with the TypeScript one.</span></li>
             <li><code>license</code><span>MIT for everything. Free for any use, including commercial. If the project needs funding, it will come from donations, not a paid edition.</span></li>
           </ul>
         </div>

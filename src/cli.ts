@@ -11,6 +11,7 @@ import { createApp } from "./gates/rest.ts";
 import { serveStdio } from "./gates/mcp.ts";
 import { VERSION } from "./gates/discovery.ts";
 import { loadProject } from "./load.ts";
+import { generateTypes } from "./typegen.ts";
 
 const HELP = `aicms ${VERSION} — the CMS for AI agents
 
@@ -18,8 +19,10 @@ Usage: aicms <command> [options]
 
 Project
   init [dir]                    Create aicms.config.ts and example models
-  dev | start                   Serve REST, MCP and discovery (--port 4321, --host 127.0.0.1)
+  dev | start                   Serve Studio, REST, MCP and events (--port 4321, --host 127.0.0.1)
+  login [--url <server>]        A one-time Studio sign-in link (valid 15 minutes)
   describe [model]              What the site contains, as JSON
+  types [--out <file>]          TypeScript types for @aicms/client (stdout by default)
 
 Agents
   agent create <name>           Issue a token for an agent from aicms.config (or "owner")
@@ -33,6 +36,11 @@ Review
   merge <id>                    Publish a changeset
   reject <id> --comment "..."   Send it back to the agent (--final closes it instead)
   log [--limit 20]              Recent actions from people and agents
+
+Roll back
+  history <entry-id>            Versions of an entry: who, when, which fields
+  restore <entry-id> <version>  Publish an earlier version of an entry
+  revert <changeset-id>         Undo a merged changeset
 
 Options: --config <file>  --json`;
 
@@ -147,7 +155,7 @@ function init(dir: string) {
 
 Next:
   aicms agent create writer   ${dim("# a token for your first agent")}
-  aicms dev                   ${dim("# REST, MCP and discovery on http://127.0.0.1:4321")}`);
+  aicms dev                   ${dim("# Studio, REST and MCP on http://127.0.0.1:4321")}`);
 }
 
 async function main() {
@@ -162,6 +170,8 @@ async function main() {
       final: { type: "boolean" },
       config: { type: "string", short: "c" },
       limit: { type: "string" },
+      url: { type: "string" },
+      out: { type: "string", short: "o" },
       all: { type: "boolean" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -182,13 +192,16 @@ async function main() {
       const port = Number(values.port ?? process.env.PORT ?? 4321);
       const hostname = values.host ?? process.env.HOST ?? "127.0.0.1";
       const app = createApp(k);
+      const code = await k.createLoginCode();
       serve({ fetch: app.fetch, port, hostname }, (info) => {
         const base = `http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${info.port}`;
         const agents = Object.keys(k.config.agents);
         console.log(`${bold("AICMS")} ${VERSION} · ${k.config.name}
+  ${dim("Studio")}   ${bold(`${base}/studio/login?code=${code}`)}  ${dim("(one-time link, 15 min; aicms login makes another)")}
   ${dim("MCP")}      ${base}/mcp
   ${dim("REST")}     ${base}/api/v1
   ${dim("OpenAPI")}  ${base}/openapi.json
+  ${dim("events")}   ${base}/api/v1/events
   ${dim("llms.txt")} ${base}/llms.txt
   ${dim("models")}   ${[...k.models.keys()].join(", ") || "none"}
   ${dim("agents")}   ${agents.join(", ") || "none"}  ${dim("(aicms agent create <name> issues a token)")}`);
@@ -206,6 +219,53 @@ async function main() {
       const actor = values.token ? await k.resolveToken(values.token) : values.agent ? k.actor(values.agent) : fail("Pass --agent <name> or --token <token>");
       await serveStdio(k, actor);
       return; // keep running; stdio transport owns the process
+    }
+
+    case "login": {
+      const base = (values.url ?? `http://127.0.0.1:${process.env.PORT ?? 4321}`).replace(/\/+$/, "");
+      const code = await k.createLoginCode();
+      console.log(`${green("✓")} Open this link within 15 minutes to sign in to Studio (it works once):\n\n  ${bold(`${base}/studio/login?code=${code}`)}`);
+      break;
+    }
+
+    case "types": {
+      const text = generateTypes([...k.models.values()], k.config.name);
+      if (values.out) {
+        writeFileSync(resolve(process.cwd(), values.out), text);
+        console.log(`${green("✓")} Wrote ${bold(values.out)} ${dim(`(${k.models.size} models)`)}`);
+      } else process.stdout.write(text);
+      break;
+    }
+
+    case "history": {
+      if (!args[0]) fail("Usage: aicms history <entry-id>");
+      const h: any = await asOwner(k, "cms.history", { id: args[0] });
+      if (values.json) console.log(JSON.stringify(h, null, 2));
+      else {
+        console.log(`${bold(h.id)} ${h.model} ${dim(h.current ? `current v${h.current}` : "deleted")}`);
+        for (const v of h.versions) {
+          console.log(`  v${String(v.version).padEnd(3)} ${dim(v.at)} ${v.actor.padEnd(12)} ${v.deleted ? red("deleted") : dim(v.changed.join(", ") || "—")}  ${dim(v.changeset ?? "")}`);
+        }
+      }
+      break;
+    }
+
+    case "restore": {
+      const version = Number(args[1]);
+      if (!args[0] || !Number.isInteger(version)) fail("Usage: aicms restore <entry-id> <version>");
+      await asOwner(k, "cms.restore", { id: args[0], version });
+      const r: any = await asOwner(k, "cms.submit", { note: `Restore ${args[0]} to v${version}` });
+      console.log(`${green("✓")} Restored ${bold(args[0])} to v${version}${r.entries ? dim(` (now v${r.entries.find((e: any) => e.id === args[0])?.version})`) : ""}`);
+      break;
+    }
+
+    case "revert": {
+      if (!args[0]) fail("Usage: aicms revert <changeset-id>");
+      const d: any = await asOwner(k, "cms.revert", { changeset: args[0] });
+      await asOwner(k, "cms.submit", { note: `Revert ${args[0]}` });
+      console.log(`${green("✓")} Reverted ${bold(args[0])}`);
+      for (const i of d.items) console.log(`  ${i.op.padEnd(6)} ${dim(i.id)}`);
+      break;
     }
 
     case "describe": {

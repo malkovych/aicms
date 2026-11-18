@@ -1,0 +1,38 @@
+{
+  "name": "@aicms/next",
+  "version": "0.2.0",
+  "description": "AICMS for Next.js: cached reads with cache tags, revalidation from webhooks, a <Blocks /> component.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/malkovych/aicms.git",
+    "directory": "packages/next"
+  },
+  "homepage": "https://malkovych.github.io/aicms/",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aicms/client": "^0.2.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "react": "^19.3.1"
+  }
+}

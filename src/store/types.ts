@@ -112,12 +112,30 @@ export interface Store {
 
   logEvent(e: EventRow): Promise<void>;
   countEvents(actor: string, sinceIso: string): Promise<number>;
-  listEvents(q: { actor?: string; limit: number }): Promise<EventRow[]>;
+  /** Newest first. `before` is an event id, for paging back. */
+  listEvents(q: { actor?: string; limit: number; before?: number }): Promise<EventRow[]>;
+  /** Last call and number of calls since `sinceIso`, per actor. */
+  actorStats(sinceIso: string): Promise<{ actor: string; lastAt: string; recent: number }[]>;
 
-  createToken(row: { id: string; agent: string; hash: string; createdAt: string }): Promise<void>;
-  findToken(hash: string): Promise<{ id: string; agent: string } | null>;
+  createToken(row: TokenRow): Promise<void>;
+  /** An active token: not revoked and not expired at `nowIso`. */
+  findToken(hash: string, nowIso: string): Promise<{ id: string; agent: string; kind: TokenKind } | null>;
+  revokeToken(id: string, at: string): Promise<boolean>;
   revokeTokens(agent: string, at: string): Promise<number>;
-  listTokens(): Promise<{ id: string; agent: string; createdAt: string; revokedAt: string | null }[]>;
+  /** Agent tokens and Studio sessions, newest first (login codes are left out). */
+  listTokens(): Promise<(Omit<TokenRow, "hash"> & { revokedAt: string | null })[]>;
+}
+
+/** `agent`: an API token. `session`: a Studio sign-in. `login`: a one-time code that starts a session. */
+export type TokenKind = "agent" | "session" | "login";
+
+export interface TokenRow {
+  id: string;
+  agent: string;
+  hash: string;
+  createdAt: string;
+  kind?: TokenKind;
+  expiresAt?: string;
 }
 
 export class ConflictError extends Error {

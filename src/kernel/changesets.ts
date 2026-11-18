@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Model } from "../schema/model.ts";
-import { normalizePatch, projectData, storedSchema, uniqueFields } from "../schema/model.ts";
+import { displayTitle, normalizePatch, projectData, storedSchema, uniqueFields } from "../schema/model.ts";
 import { slugify } from "../schema/slug.ts";
 import { applyPatch } from "../store/sqlite.ts";
 import { ConflictError, type ChangesetItem, type ChangesetRow, type CheckIssue, type EntryRow } from "../store/types.ts";
@@ -114,6 +114,22 @@ export async function draftEntry(
     entry: projectData(model, result, "markdown"),
     next: "Saved as a draft, not public yet. Call cms_submit when your changes are ready.",
   };
+}
+
+/** Drop drafted changes from the actor's open changeset: one entry, or all of them. */
+export async function discardDrafts(k: Kernel, actor: Actor, id?: string) {
+  const cs = await k.store.findOpenChangeset(actor.id);
+  if (!cs || !cs.items.length) {
+    if (id) throw new AicmsError("not_found", `You have no draft of ${id}`);
+    return { changeset: cs?.id ?? null, discarded: 0, left: 0 };
+  }
+  const before = cs.items.length;
+  cs.items = id ? cs.items.filter((i) => i.id !== id) : [];
+  if (cs.items.length === before) throw new AicmsError("not_found", `You have no draft of ${id}`);
+  cs.issues = [];
+  cs.updatedAt = now();
+  await k.store.saveChangeset(cs);
+  return { changeset: cs.id, discarded: before - cs.items.length, left: cs.items.length };
 }
 
 /** Propose deleting an entry, or drop a draft that was never published. */
@@ -329,13 +345,146 @@ export async function diffChangeset(k: Kernel, cs: ChangesetRow) {
     const current = item.op === "create" ? null : await k.store.getEntry(item.id);
     const before = model && current ? projectData(model, current.data, "markdown") : {};
     const after = model && item.data ? projectData(model, item.data, "markdown") : {};
-    const fields = item.op === "delete" ? [] : Object.keys(item.data ?? {});
+    const order = model ? Object.keys(model.fields) : [];
+    const fields = item.op === "delete" ? [] : Object.keys(item.data ?? {}).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    const merged = item.op === "create" ? item.data ?? {} : current ? applyPatch(current.data, item.data ?? {}) : {};
     items.push({
       op: item.op,
       model: item.model,
       id: item.id,
+      title: model ? displayTitle(model, item.op === "delete" ? current?.data ?? {} : merged) : "",
       changes: fields.map((f) => ({ field: f, before: before[f] ?? null, after: item.data?.[f] === null ? null : after[f] ?? null })),
     });
   }
   return { ...summarize(cs), items };
+}
+
+/** Which model and locale an entry belongs to, even after it was deleted. */
+async function locateEntry(k: Kernel, id: string): Promise<{ model: string; locale: string } | null> {
+  const current = await k.store.getEntry(id);
+  if (current) return { model: current.model, locale: current.locale };
+  for (const v of await k.store.versions(id)) {
+    if (!v.changesetId) continue;
+    const item = (await k.store.getChangeset(v.changesetId))?.items.find((i) => i.id === id);
+    if (item) return { model: item.model, locale: item.locale };
+  }
+  return null;
+}
+
+/** Every version of an entry, newest first, with the fields each one changed. */
+export async function entryHistory(k: Kernel, actor: Actor, id: string) {
+  const where = await locateEntry(k, id);
+  const model = where && k.models.get(where.model);
+  if (!where || !model || !modelPermissions(actor, model).read) throw new AicmsError("not_found", `No entry ${id}`);
+  const versions = await k.store.versions(id);
+  const current = await k.store.getEntry(id);
+  return {
+    id,
+    model: model.name,
+    locale: where.locale,
+    current: current?.version ?? null,
+    versions: versions.map((v, i) => {
+      const prev = versions[i + 1]?.data ?? {};
+      const data = v.data ?? {};
+      const changed = v.data === null ? [] : [...new Set([...Object.keys(prev), ...Object.keys(data)])].filter((f) => JSON.stringify(prev[f]) !== JSON.stringify(data[f]));
+      return {
+        version: v.version,
+        at: v.createdAt,
+        actor: v.actor,
+        changeset: v.changesetId,
+        ...(v.data === null ? { deleted: true } : { changed }),
+      };
+    }),
+  };
+}
+
+/** One version's data, for reading or comparing. */
+export async function entryVersion(k: Kernel, actor: Actor, id: string, version: number) {
+  const history = await entryHistory(k, actor, id);
+  const row = (await k.store.versions(id)).find((v) => v.version === version);
+  if (!row) throw new AicmsError("not_found", `${id} has no version ${version}. Versions: ${history.versions.map((v) => v.version).join(", ")}`);
+  const model = k.models.get(history.model)!;
+  return { id, model: model.name, version, at: row.createdAt, actor: row.actor, changeset: row.changesetId, deleted: row.data === null, data: row.data };
+}
+
+/**
+ * Draft a change that brings an entry back to the state it had at `version`.
+ * A deleted entry is re-created with the same id. Replaces any draft of that entry in the caller's changeset.
+ */
+export async function restoreEntry(k: Kernel, actor: Actor, id: string, version: number) {
+  const target = await entryVersion(k, actor, id, version);
+  if (target.deleted) throw new AicmsError("invalid", `Version ${version} of ${id} is its deletion. Restore an earlier version.`);
+  const model = k.models.get(target.model)!;
+  const data = Object.fromEntries(Object.entries(target.data ?? {}).filter(([key]) => key in model.fields));
+  const perms = modelPermissions(actor, model);
+  const current = await k.store.getEntry(id);
+  const cs = await openChangeset(k, actor);
+  const others = cs.items.filter((i) => i.id !== id);
+
+  let item: ChangesetItem;
+  if (current) {
+    const patch: Record<string, unknown> = {};
+    for (const key of new Set([...Object.keys(current.data), ...Object.keys(data)])) {
+      if (!(key in model.fields)) continue;
+      if (JSON.stringify(current.data[key]) !== JSON.stringify(data[key])) patch[key] = data[key] ?? null;
+    }
+    const fields = Object.keys(patch);
+    if (!fields.length) throw new AicmsError("invalid", `${id} already matches version ${version}`);
+    const denied = fields.filter((f) => !perms.updateFields.includes(f));
+    if (denied.length) throw new AicmsError("forbidden", `Restoring needs changes to ${denied.map((d) => `${model.name}.${d}`).join(", ")}, which you can't change`);
+    item = { op: "update", model: model.name, id, locale: current.locale, data: patch, baseVersion: current.version };
+  } else {
+    if (!perms.create) throw new AicmsError("forbidden", `Restoring a deleted ${model.name} needs permission to create ${model.name} entries`);
+    const locale = (await locateEntry(k, id))!.locale;
+    item = { op: "create", model: model.name, id, locale, data };
+  }
+  cs.items = [...others, item];
+  if (cs.items.length > itemLimit(actor)) throw new AicmsError("budget", `A changeset may hold ${itemLimit(actor)} items. Submit this one first.`);
+  cs.updatedAt = now();
+  cs.issues = [];
+  await k.store.saveChangeset(cs);
+  return {
+    changeset: cs.id,
+    op: item.op,
+    id,
+    model: model.name,
+    restores: version,
+    fields: Object.keys(item.data ?? {}),
+    next: "The restore is drafted. Call cms_submit to publish it.",
+  };
+}
+
+/** Draft the inverse of a merged changeset: creations are deleted, edits and deletions are undone. */
+export async function revertChangeset(k: Kernel, actor: Actor, id: string) {
+  const cs = await k.store.getChangeset(id);
+  if (!cs) throw new AicmsError("not_found", `No changeset ${id}`);
+  if (cs.status !== "merged") throw new AicmsError("invalid", `Only merged changesets can be reverted; ${id} is ${cs.status}`);
+
+  const plan: { item: ChangesetItem; made: number }[] = [];
+  const moved: string[] = [];
+  for (const item of cs.items) {
+    const versions = await k.store.versions(item.id);
+    const made = versions.find((v) => v.changesetId === cs.id);
+    if (!made) continue;
+    if (versions[0].version !== made.version) moved.push(item.id);
+    plan.push({ item, made: made.version });
+  }
+  if (moved.length) {
+    throw new AicmsError("conflict", `Changed again after ${id} was merged: ${moved.join(", ")}. Restore those entries from their history instead.`, { entries: moved });
+  }
+
+  const done = [];
+  for (const { item, made } of plan) {
+    const model = k.models.get(item.model);
+    if (!model) throw new AicmsError("invalid", `Model "${item.model}" no longer exists`);
+    if (item.op === "create") done.push(await deleteEntry(k, actor, model, item.id));
+    else done.push(await restoreEntry(k, actor, item.id, made - 1));
+  }
+  const open = await k.store.findOpenChangeset(actor.id);
+  return {
+    changeset: open?.id,
+    reverts: id,
+    items: done.map((d) => ({ op: d.op, id: d.id })),
+    next: "The revert is drafted. Call cms_submit to publish it.",
+  };
 }

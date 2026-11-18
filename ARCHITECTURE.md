@@ -3,7 +3,7 @@
 > A CMS where AI agents are first-class users and people are the editors and owners.
 > Describe a model once and get REST, MCP tools, an admin and types.
 
-Status: v0.1 · phase 0 works (schemas, Action Bus, changesets, SQLite, REST, MCP, CLI) · [Українською](ARCHITECTURE.uk.md)
+Status: v0.2 · phase 1 works: Studio with Inbox, rollback, live events, TypeScript and Python SDKs, Next.js and Astro adapters, on top of the phase 0 kernel · [Українською](ARCHITECTURE.uk.md)
 
 ---
 
@@ -71,7 +71,7 @@ There is nothing else to learn.
 
 ### 4.1 Schema Engine
 - Reads models from `models/*.ts` and from modules.
-- Produces JSON Schema for every model and every Action, OpenAPI, the agent manifest and `llms.txt`. TypeScript types are inferred straight from the model definition, so there is no codegen step.
+- Produces JSON Schema for every model and every Action, OpenAPI, the agent manifest and `llms.txt`. TypeScript types: inside the CMS project they are inferred straight from the model (`InferModel<typeof post>`); a frontend in another repository gets them from `aicms types`, which `@aicms/client` takes as a type parameter.
 - Validation uses Zod 4 (a Standard Schema implementation), so the same schema works on the server and in the browser.
 
 ### 4.2 Action Bus
@@ -81,7 +81,7 @@ There is nothing else to learn.
 - Every gate (MCP, REST, CLI, Studio) is a thin wrapper over this pipeline, so behaviour is identical for people and agents.
 
 ### 4.3 Policy
-- **Scopes:** `post:read`, `post:draft` (create + update), `post:update.seo` (one field), `post:delete`, `post:*`, `changesets:review`, `*`. Module Actions declare their own scopes, e.g. `reviews:write`.
+- **Scopes:** `post:read`, `post:draft` (create + update), `post:update.seo` (one field), `post:delete`, `post:*`, `changesets:review`, `agents:manage`, `events:read`, `*`. Module Actions declare their own scopes, e.g. `reviews:write`.
 - **Field-level tool schemas:** a draft tool only lists the fields the agent may write. With `post:update.seo` the agent's `post_draft` tool contains `id` and `seo` and nothing else.
 - **Review mode** per agent: `human` (a person approves) or `auto` (merged when every check is green and no model requires a person). The default is `human`.
 - **The model has the last word:** if a model's `agent.can` doesn't include `publish`, any agent changeset that touches it waits for a person, whatever the agent's review mode.
@@ -261,6 +261,9 @@ An agent only sees what its scopes allow. MCP tool names use underscores (`post_
 | `cms_submit` | `cms.submit` | run checks and send the changeset for review |
 | `cms_changes` | `cms.changes` | the agent's changesets, check results and reviewer comments |
 | `cms_review` / `cms_merge` / `cms_reject` | `cms.review` … | for reviewers with `changesets:review` |
+| `cms_history` / `cms_restore` / `cms_revert` | `cms.history` … | an entry's versions; draft the restore of any version, or the undo of a merged changeset |
+| `cms_discard` | `cms.discard` | drop drafts that weren't submitted |
+| `cms_agents` / `cms_token` / `cms_revoke` / `cms_log` | `cms.agents` … | for admins (`agents:manage`, `events:read`): agents, tokens, the action log |
 | `<module>_<action>` | `<module>.<action>` | module Actions |
 
 ### 7.3 Markdown in, blocks in the database
@@ -276,41 +279,52 @@ Agents read and write Markdown comfortably; people need a visual editor. AICMS s
 2. **Learn.** `cms_describe` returns schemas, guides and examples.
 3. **Draft.** Changes are written into a changeset; production is untouched.
 4. **Check.** `cms_submit` runs schema, uniqueness, reference and conflict checks. Failures come back to the agent with field-level messages.
-5. **Review.** Automatic, or a person in Studio Inbox (until Studio ships: `aicms changes`, `aicms merge`, `aicms reject`). A rejection comment goes back to the agent through `cms_changes`.
+5. **Review.** Automatic, or a person in Studio Inbox (or `aicms changes`, `aicms merge`, `aicms reject`). A rejection comment goes back to the agent through `cms_changes` and the `changeset.rejected` event.
 6. **Publish.** Merge writes new entry versions, logs the event and fires webhooks.
-7. **Roll back.** Any version can be restored. (Phase 1.)
+7. **Roll back.** Any version of an entry can be restored (`cms_restore`, or History in Studio), and a merged changeset can be undone as a whole (`cms_revert`). Both are drafted and published like any other change, so they are checked, reviewed and logged too.
 
 ## 8. Studio: for people
 
-Five sections in the menu: **Content · Media · Inbox · Agents · Modules** (+ Settings).
+Studio is served by the kernel at `/studio/`. You sign in with a one-time link from the terminal (`aicms login`; `aicms dev` prints one when it starts), which becomes a 30-day session cookie, so there is no password to leak. Studio calls the same Actions as agents through the same pipeline; its writes are logged with the gate `studio`.
 
-- **Content.** Lists and forms generated from schemas. A block editor, live preview next to the frontend.
-- **Inbox.** Changesets from agents: a before/after diff, checks, and Approve / Reject / Comment.
-- **Agents.** Who is connected, their scopes, budgets, live activity, revoking access.
-- **Modules.** Install and remove, the module's permissions.
-- **⌘K.** Accepts commands and plain language: “find posts without a cover” → `post.list` with a filter.
-- **Presence.** See which person or agent is editing an entry right now (Yjs).
+Shipped in phase 1:
+
+- **Inbox.** Changesets from agents with a word-level before/after diff, failed checks, and Approve / Request changes (the comment goes back to the agent) / Close. A merged changeset can be undone in one click.
+- **Content.** Lists and forms generated from schemas: every field kind has an input, block fields get a Markdown editor with a live preview. Every entry has its history; any version can be opened and restored.
+- **Agents.** Scopes, review mode, budget use, last activity and pending work. Issue a token (shown once, with the MCP command to connect) or revoke access.
+- **Activity.** The action log of people and agents, live over SSE.
+- English and Ukrainian, light and dark themes, phone-sized screens.
+
+Next: **Media** and **Modules** sections, **⌘K** (commands and plain language: “find posts without a cover” → `post.list` with a filter), **presence** (who is editing an entry right now, Yjs), a block editor beside the frontend's live preview, and roles for people other than the owner.
 
 ## 9. Frameworks
 
-| Adapter | What you get |
-|---|---|
-| `@aicms/next` | Server Components, `revalidateTag` from webhooks, Draft Mode preview |
-| `@aicms/nuxt` | composables, Nitro revalidation, preview |
-| `@aicms/sveltekit` | load helpers, preview |
-| `@aicms/astro` | Content Layer loader, SSG + SSR |
-| `@aicms/react-router` | loaders for React Router 7 / Remix |
-| `@aicms/angular` | services and resolvers |
-| `@aicms/expo` | mobile client with an offline cache |
+| Adapter | What you get | Status |
+|---|---|---|
+| `@aicms/client` | typed client for any runtime with `fetch`, live events, `blocksToHtml` | phase 1 ✓ |
+| `@aicms/next` | reads cached with per-model tags, `revalidateTag` from webhooks, `<Blocks />` for Server Components | phase 1 ✓ (Draft Mode preview next) |
+| `@aicms/astro` | Content Layer loader with pre-rendered blocks | phase 1 ✓ |
+| `aicms` (PyPI) | Python client, standard library only | phase 1 ✓ |
+| `@aicms/nuxt` | composables, Nitro revalidation, preview | phase 2 |
+| `@aicms/sveltekit` | load helpers, preview | phase 2 |
+| `@aicms/react-router` | loaders for React Router 7 / Remix | later |
+| `@aicms/angular` | services and resolvers | later |
+| `@aicms/expo` | mobile client with an offline cache | later |
 
-Common to all: a client typed from your schemas, a `<Blocks />` component, an image component, a visual-editing overlay.
+Common to all: a client typed from your schemas (`aicms types`), a `<Blocks />` component or `blocksToHtml`, and later an image component and a visual-editing overlay.
 
 ```tsx
-// app/blog/[slug]/page.tsx (Next.js)
-import { cms, Blocks } from "@aicms/next"
+// lib/cms.ts
+import { createAicms } from "@aicms/next"
+import type { Schema } from "./aicms-types"            // npx aicms types --out lib/aicms-types.ts
+export const cms = createAicms<Schema>({ url: process.env.AICMS_URL! })
+
+// app/blog/[slug]/page.tsx
+import { Blocks } from "@aicms/next"
+import { cms } from "@/lib/cms"
 
 export default async function Post({ params }) {
-  const post = await cms.post.get({ slug: params.slug })   // type inferred from models/post.ts
+  const post = await cms.post.get({ slug: (await params).slug })   // typed from models/post.ts
   return <Blocks value={post.body} />
 }
 ```
@@ -351,7 +365,7 @@ Deployment modes:
 | Phase | Scope | Outcome |
 |---|---|---|
 | **0. Kernel** ✓ | Schema Engine, Action Bus, policies, changesets, event log, SQLite store, REST, MCP, discovery, webhooks, CLI | an agent drafts content over MCP, a person merges it |
-| **1. Human in the loop** | Studio MVP and Inbox, rollback, SSE events, TypeScript and Python SDKs, Next.js and Astro adapters | the first real site |
+| **1. Human in the loop** ✓ | Studio MVP and Inbox, rollback, SSE events, TypeScript and Python SDKs, Next.js and Astro adapters | the first real site |
 | **2. Lego** | module SDK, `aicms add`, official modules (seo, i18n, media, search, git-sync), agents propose modules via Inbox, GraphQL, Nuxt and SvelteKit | the ecosystem starts growing |
 | **3. Scale** | Postgres and edge, real-time presence, module registry, A2A, commerce | production for shops and media |
 
@@ -361,5 +375,5 @@ Deployment modes:
 |---|---|
 | Content in the database or in git? | The database is the source of truth: changesets, field-level permissions, concurrent agents and transactions all need it. The `git-sync` module mirrors published content to Markdown + frontmatter files and turns pull requests into changesets, so developers and coding agents can still work through git. |
 | Can an agent propose installing a module? | Yes, through Inbox, with the requested permissions shown. A person installs it. |
-| Python SDK | Phase 1, together with the TypeScript SDK. |
+| Python SDK | Shipped in phase 1 with the TypeScript SDK: `sdk/python`, standard library only. |
 | License | MIT for everything: kernel, SDKs, adapters and official modules. Free for any use, including commercial. If funding is ever needed, it comes from donations, not a paid edition. |

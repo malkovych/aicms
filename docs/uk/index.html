@@ -47,7 +47,7 @@
   <!-- ================= HERO ================= -->
   <div class="wrap hero">
     <div>
-      <div class="eyebrow">Концепт архітектури · v0.1 · листопад 2026</div>
+      <div class="eyebrow">Відкритий код · MIT · v0.2 · листопад 2026</div>
       <h1 class="wordmark"><span class="ai">AI</span>CMS</h1>
       <p class="lead">CMS, у якій AI-агенти працюють з контентом так само природно, як люди.</p>
       <p class="body">Опиши модель один раз. AICMS сам згенерує API, MCP-інструменти для агентів, адмінку для людей і типи для фронтенду. Модулі додаються як цеглинки, а кожна зміна агента проходить перевірку і відкочується одним кліком.</p>
@@ -67,7 +67,7 @@
         <a class="pri" href="https://github.com/malkovych/aicms">Відкрити на GitHub</a>
         <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.uk.md">Читати специфікацію</a>
       </div>
-      <div class="status"><i></i>Фаза 0 працює: ядро, REST, MCP і CLI. Далі Studio.</div>
+      <div class="status"><i></i>Фаза 1 працює: Studio з «Вхідними», відкат, події наживо, SDK для TypeScript і Python, Next.js і Astro.</div>
     </div>
 
     <div class="demo" aria-label="Одна модель генерує всі інтерфейси">
@@ -125,13 +125,13 @@
 <span class="c"># 422 з назвою поля, якщо дані не пройшли схему</span></pre>
       </div>
       <div class="panel" role="tabpanel" id="p-sdk" aria-labelledby="t-sdk" hidden>
-<pre class="code"><span class="k">import</span> { cms } <span class="k">from</span> <span class="s">"@aicms/next"</span>
+<pre class="code"><span class="k">import</span> { cms } <span class="k">from</span> <span class="s">"@/lib/cms"</span>  <span class="c">// createAicms&lt;Schema&gt;() from @aicms/next</span>
 
 <span class="k">const</span> post = <span class="k">await</span> cms.post.<span class="f">get</span>({ slug: <span class="s">"yak-obraty-spf"</span> })
 
 post.title   <span class="c">// string</span>
 post.cover   <span class="c">// Media { url, alt, width, height }</span>
-post.body    <span class="c">// Block&lt;"paragraph" | "image" | "cta"&gt;[]</span>
+post.body    <span class="c">// Block[]</span>
 post.author  <span class="c">// помилка типів ще до запуску:</span>
              <span class="c">// такого поля в моделі post немає</span></pre>
       </div>
@@ -672,10 +672,10 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
         <p>Кожен адаптер дає типізований клієнт зі схем, компонент <code>&lt;Blocks /&gt;</code>, компонент зображень, live preview і ревалідацію кешу з вебхуків.</p>
       </div>
       <div class="fw">
-        <div class="plate fwc"><h3>Next.js</h3><code>@aicms/next</code><p>Server Components, revalidateTag, Draft Mode</p></div>
+        <div class="plate fwc"><h3>Next.js <span class="ready">готово</span></h3><code>@aicms/next</code><p>Server Components, revalidateTag, &lt;Blocks /&gt;</p></div>
         <div class="plate fwc"><h3>Nuxt</h3><code>@aicms/nuxt</code><p>composables, ревалідація через Nitro</p></div>
         <div class="plate fwc"><h3>SvelteKit</h3><code>@aicms/sveltekit</code><p>load-хелпери, preview</p></div>
-        <div class="plate fwc"><h3>Astro</h3><code>@aicms/astro</code><p>Content Layer loader, SSG і SSR</p></div>
+        <div class="plate fwc"><h3>Astro <span class="ready">готово</span></h3><code>@aicms/astro</code><p>Content Layer loader, SSG і SSR</p></div>
         <div class="plate fwc"><h3>React Router</h3><code>@aicms/react-router</code><p>loaders для v7 і Remix</p></div>
         <div class="plate fwc"><h3>Angular</h3><code>@aicms/angular</code><p>сервіси й резолвери</p></div>
         <div class="plate fwc"><h3>Expo</h3><code>@aicms/expo</code><p>мобільний клієнт з офлайн-кешем</p></div>
@@ -684,11 +684,12 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
       <div class="duo">
         <div class="codecard">
           <div class="filebar"><span class="fname">app/blog/[slug]/page.tsx</span><span>Next.js</span></div>
-<pre class="code"><span class="k">import</span> { cms, Blocks } <span class="k">from</span> <span class="s">"@aicms/next"</span>
+<pre class="code"><span class="k">import</span> { Blocks } <span class="k">from</span> <span class="s">"@aicms/next"</span>
+<span class="k">import</span> { cms } <span class="k">from</span> <span class="s">"@/lib/cms"</span>
 
 <span class="k">export default async function</span> <span class="f">Post</span>({ params }) {
-  <span class="c">// тип виведено з models/post.ts</span>
-  <span class="k">const</span> post = <span class="k">await</span> cms.post.<span class="f">get</span>({ slug: params.slug })
+  <span class="c">// типи з models/post.ts через `aicms types`</span>
+  <span class="k">const</span> post = <span class="k">await</span> cms.post.<span class="f">get</span>({ slug: (<span class="k">await</span> params).slug })
 
   <span class="k">return</span> (
     &lt;<span class="f">article</span>&gt;
@@ -742,7 +743,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
       </div>
       <div class="road">
         <div class="plate ph"><span class="n">Фаза 0 · готово</span><h3>Ядро</h3><ul><li>Schema Engine</li><li>Action Bus і політики</li><li>Changesets і журнал подій</li><li>SQLite-сховище</li><li>REST і MCP</li><li>CLI</li></ul><p class="res">Агент пише чернетки через MCP, людина їх мерджить</p></div>
-        <div class="plate ph"><span class="n">Фаза 1</span><h3>Людина в контурі</h3><ul><li>Studio MVP і «Вхідні»</li><li>Відкат з журналу</li><li>SDK для TypeScript і Python</li><li>Адаптери Next.js, Astro</li></ul><p class="res">Перший реальний сайт</p></div>
+        <div class="plate ph"><span class="n">Фаза 1 · готово</span><h3>Людина в контурі</h3><ul><li>Studio: «Вхідні», контент, агенти, журнал</li><li>Відкат: відновити версію, скасувати changeset</li><li>Події наживо через SSE</li><li>SDK для TypeScript і Python</li><li>Адаптери Next.js і Astro</li></ul><p class="res">Перший реальний сайт</p></div>
         <div class="plate ph"><span class="n">Фаза 2</span><h3>Lego</h3><ul><li>SDK модулів, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>Модуль git-sync</li><li>Агенти пропонують модулі через «Вхідні»</li><li>Nuxt, SvelteKit</li></ul><p class="res">Екосистема модулів починає рости</p></div>
         <div class="plate ph"><span class="n">Фаза 3</span><h3>Масштаб</h3><ul><li>Postgres і edge</li><li>Спільне редагування</li><li>Реєстр модулів, A2A</li><li>commerce</li></ul><p class="res">Продакшн для магазинів і медіа</p></div>
       </div>
@@ -764,7 +765,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
           <ul class="rows">
             <li><code>сховище</code><span>Джерело правди — база. Модуль git-sync дзеркалить опублікований контент у Markdown-файли і перетворює pull request на changesets.</span></li>
             <li><code>модулі</code><span>Агент може запропонувати модуль. Пропозиція приходить у «Вхідні» з правами, які він просить, а встановлює людина.</span></li>
-            <li><code>python</code><span>Python SDK виходить у фазі 1 разом з TypeScript.</span></li>
+            <li><code>python</code><span>Python SDK вийшов у фазі 1 разом з TypeScript.</span></li>
             <li><code>ліцензія</code><span>MIT для всього. Безкоштовно для будь-якого використання, зокрема комерційного. Якщо проєкту знадобиться фінансування, воно буде через донати, а не через платну версію.</span></li>
           </ul>
         </div>

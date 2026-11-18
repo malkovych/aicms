@@ -4,3 +4,7 @@ dist/
 *.db
 .DS_Store
 .claude/
+*.tsbuildinfo
+__pycache__/
+*.egg-info/
+.venv/

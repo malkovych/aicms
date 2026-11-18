@@ -10,6 +10,8 @@ import {
   type IndexSpec,
   type ListQuery,
   type Store,
+  type TokenKind,
+  type TokenRow,
   type VersionRow,
 } from "./types.ts";
 
@@ -110,9 +112,17 @@ CREATE TABLE IF NOT EXISTS tokens (
   agent TEXT NOT NULL,
   hash TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL,
-  revoked_at TEXT
+  revoked_at TEXT,
+  kind TEXT NOT NULL DEFAULT 'agent',
+  expires_at TEXT
 );
 `;
+
+/** Columns added after a table first shipped: [table, column, definition]. */
+const MIGRATIONS: [string, string, string][] = [
+  ["tokens", "kind", "TEXT NOT NULL DEFAULT 'agent'"],
+  ["tokens", "expires_at", "TEXT"],
+];
 
 type Row = Record<string, SQLInputValue>;
 const SAFE_IDENT = /^[a-zA-Z][a-zA-Z0-9_]*$/;
@@ -163,6 +173,10 @@ export class SqliteStore implements Store {
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     this.db.exec(SCHEMA);
+    for (const [table, column, def] of MIGRATIONS) {
+      const has = this.all(`PRAGMA table_info(${table})`).some((c) => c.name === column);
+      if (!has) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+    }
   }
 
   private all(sql: string, ...params: SQLInputValue[]): Row[] {
@@ -303,13 +317,15 @@ export class SqliteStore implements Store {
         if (item.op === "create") {
           if (cur) throw new ConflictError(item.id, `Entry ${item.id} already exists`);
           const data = item.data ?? {};
+          // A restored entry keeps its id, so its history continues where it stopped.
+          const version = Number(this.get("SELECT MAX(version) AS v FROM versions WHERE entry_id = ?", item.id)?.v ?? 0) + 1;
           this.run(
             `INSERT INTO entries (id, model, locale, data, version, created_at, updated_at, created_by, updated_by)
-             VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`,
-            item.id, item.model, item.locale, JSON.stringify(data), at, at, cs.actor, cs.actor,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            item.id, item.model, item.locale, JSON.stringify(data), version, at, at, cs.actor, cs.actor,
           );
-          this.run("INSERT INTO versions VALUES (?, 1, ?, ?, ?, ?)", item.id, JSON.stringify(data), cs.id, cs.actor, at);
-          touched.push({ id: item.id, model: item.model, locale: item.locale, data, version: 1, createdAt: at, updatedAt: at, createdBy: cs.actor, updatedBy: cs.actor });
+          this.run("INSERT INTO versions VALUES (?, ?, ?, ?, ?, ?)", item.id, version, JSON.stringify(data), cs.id, cs.actor, at);
+          touched.push({ id: item.id, model: item.model, locale: item.locale, data, version, createdAt: at, updatedAt: at, createdBy: cs.actor, updatedBy: cs.actor });
           continue;
         }
         if (!cur) throw new ConflictError(item.id, `Entry ${item.id} was deleted after it was drafted`);
@@ -344,10 +360,13 @@ export class SqliteStore implements Store {
     return Number(this.get("SELECT COUNT(*) AS n FROM events WHERE actor = ? AND at >= ?", actor, sinceIso)?.n ?? 0);
   }
 
-  async listEvents(q: { actor?: string; limit: number }) {
-    const rows = q.actor
-      ? this.all("SELECT * FROM events WHERE actor = ? ORDER BY id DESC LIMIT ?", q.actor, q.limit)
-      : this.all("SELECT * FROM events ORDER BY id DESC LIMIT ?", q.limit);
+  async listEvents(q: { actor?: string; limit: number; before?: number }) {
+    const where: string[] = [];
+    const params: SQLInputValue[] = [];
+    if (q.actor) { where.push("actor = ?"); params.push(q.actor); }
+    if (q.before) { where.push("id < ?"); params.push(q.before); }
+    const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const rows = this.all(`SELECT * FROM events ${clause} ORDER BY id DESC LIMIT ?`, ...params, q.limit);
     return rows.map((r) => ({
       id: Number(r.id),
       at: r.at as string,
@@ -361,13 +380,30 @@ export class SqliteStore implements Store {
     }));
   }
 
-  async createToken(t: { id: string; agent: string; hash: string; createdAt: string }) {
-    this.run("INSERT INTO tokens (id, agent, hash, created_at) VALUES (?, ?, ?, ?)", t.id, t.agent, t.hash, t.createdAt);
+  async actorStats(sinceIso: string) {
+    return this.all(
+      "SELECT actor, MAX(at) AS last_at, SUM(CASE WHEN at >= ? THEN 1 ELSE 0 END) AS recent FROM events GROUP BY actor",
+      sinceIso,
+    ).map((r) => ({ actor: r.actor as string, lastAt: r.last_at as string, recent: Number(r.recent ?? 0) }));
   }
 
-  async findToken(hash: string) {
-    const r = this.get("SELECT id, agent FROM tokens WHERE hash = ? AND revoked_at IS NULL", hash);
-    return r ? { id: r.id as string, agent: r.agent as string } : null;
+  async createToken(t: TokenRow) {
+    this.run(
+      "INSERT INTO tokens (id, agent, hash, created_at, kind, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+      t.id, t.agent, t.hash, t.createdAt, t.kind ?? "agent", toSql(t.expiresAt),
+    );
+  }
+
+  async findToken(hash: string, nowIso: string) {
+    const r = this.get(
+      "SELECT id, agent, kind FROM tokens WHERE hash = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)",
+      hash, nowIso,
+    );
+    return r ? { id: r.id as string, agent: r.agent as string, kind: r.kind as TokenKind } : null;
+  }
+
+  async revokeToken(id: string, at: string) {
+    return Number(this.run("UPDATE tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL", at, id).changes) > 0;
   }
 
   async revokeTokens(agent: string, at: string) {
@@ -375,10 +411,12 @@ export class SqliteStore implements Store {
   }
 
   async listTokens() {
-    return this.all("SELECT id, agent, created_at, revoked_at FROM tokens ORDER BY created_at DESC").map((r) => ({
+    return this.all("SELECT id, agent, kind, created_at, expires_at, revoked_at FROM tokens WHERE kind != 'login' ORDER BY created_at DESC").map((r) => ({
       id: r.id as string,
       agent: r.agent as string,
+      kind: r.kind as TokenKind,
       createdAt: r.created_at as string,
+      ...(r.expires_at ? { expiresAt: r.expires_at as string } : {}),
       revokedAt: (r.revoked_at as string) ?? null,
     }));
   }
