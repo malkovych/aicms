@@ -1,6 +1,6 @@
 # aicms (Python)
 
-Python client for [AICMS](https://github.com/malkovych/aicms), the CMS for AI agents. Standard library only, Python 3.9+.
+Python client for [AICMS](https://github.com/malkovych/aicms), the CMS for AI agents. Standard library only, Python 3.10+.
 
 ```bash
 pip install aicms
