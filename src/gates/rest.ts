@@ -7,6 +7,9 @@ import type { Actor } from "../kernel/policy.ts";
 import { filterableFields } from "../schema/model.ts";
 import { llmsTxt, manifest, VERSION } from "./discovery.ts";
 import { eventStream } from "./events.ts";
+import { buildSchema, runGraphQL } from "./graphql.ts";
+import { moduleContext } from "../kernel/modules.ts";
+import type { GraphQLSchema } from "graphql";
 import { handleMcpRequest } from "./mcp.ts";
 import { openapi } from "./openapi.ts";
 import { findStudio, mountStudio, SESSION_COOKIE } from "./studio.ts";
@@ -106,12 +109,36 @@ export function createApp(k: Kernel, opts: AppOptions = {}): Hono<Env> {
       openapi: `${origin(c)}/openapi.json`,
       llms: `${origin(c)}/llms.txt`,
       events: `${origin(c)}/api/v1/events`,
+      graphql: `${origin(c)}/graphql`,
       studio: `${origin(c)}/studio/`,
     }),
   );
   app.get("/llms.txt", (c) => c.text(llmsTxt(k, c.get("actor"), origin(c))));
   app.get("/.well-known/aicms.json", (c) => c.json(manifest(k, origin(c))));
   app.get("/openapi.json", (c) => c.json(openapi(k, c.get("actor"), origin(c))));
+
+  // ---- GraphQL (schema rebuilt when a module adds models) ----
+  let schema: GraphQLSchema | null = null;
+  k.on("module.installed", () => {
+    schema = null;
+  });
+  const gql = async (c: Context<Env>, req: Parameters<typeof runGraphQL>[3], readOnly: boolean) => {
+    schema ??= buildSchema(k);
+    const r = await runGraphQL(k, schema, c.get("actor"), req, readOnly);
+    return c.json(r.body, r.status as 200);
+  };
+  app.post("/graphql", async (c) => gql(c, await body(c), false));
+  app.get("/graphql", async (c) => {
+    const q = c.req.query();
+    if (!q.query) return c.json({ graphql: `${origin(c)}/graphql`, hint: "POST { query, variables } or GET ?query=…; the schema is generated from your models (introspection works)." });
+    let variables: Record<string, unknown> | undefined;
+    try {
+      variables = q.variables ? JSON.parse(q.variables) : undefined;
+    } catch {
+      throw new AicmsError("invalid", "variables must be JSON");
+    }
+    return gql(c, { query: q.query, variables, operationName: q.operationName }, true);
+  });
 
   // ---- MCP ----
   app.all("/mcp", (c) => handleMcpRequest(k, c.get("actor"), c.req.raw));
@@ -204,6 +231,21 @@ export function createApp(k: Kernel, opts: AppOptions = {}): Hono<Env> {
   });
 
   if (opts.studio !== false) mountStudio(app, k, opts.studio ?? findStudio());
+
+  // ---- module routes (sitemap.xml, /media/…), matched at request time so installs take effect at once ----
+  app.all("*", async (c, next) => {
+    const url = new URL(c.req.url);
+    const hit = k.matchRoute(c.req.method, url.pathname);
+    if (!hit) return next();
+    const mod = k.modules.find((m) => m.name === hit.route.module)!;
+    const actor = c.get("actor");
+    const started = Date.now();
+    const res = await hit.route.handler({ request: c.req.raw, url, params: hit.params, ctx: moduleContext(k, mod, actor, c.get("gate")) });
+    if (c.req.method !== "GET" && c.req.method !== "HEAD") {
+      await k.store.logEvent({ at: new Date().toISOString(), actor: actor.id, gate: c.get("gate"), action: `${hit.route.method} ${hit.route.path}`, ok: res.ok, ms: Date.now() - started }).catch(() => {});
+    }
+    return res;
+  });
 
   app.notFound((c) => c.json({ error: { code: "not_found", message: `No route ${c.req.method} ${new URL(c.req.url).pathname}` } }, 404));
   return app;

@@ -39,7 +39,7 @@ export const stats = defineModule({
   },
 });
 
-export async function makeCms(extra: Partial<Parameters<typeof createCMS>[0]> = {}) {
+export async function makeCms(extra: Partial<Parameters<typeof createCMS>[0]> = {}, opts: Parameters<typeof createCMS>[1] = {}) {
   return createCMS({
     name: "Test site",
     db: sqlite(":memory:"),
@@ -55,5 +55,5 @@ export async function makeCms(extra: Partial<Parameters<typeof createCMS>[0]> = 
       tiny: { scopes: ["tag:draft"], review: "auto", budget: { actionsPerHour: 3 } },
     },
     ...extra,
-  });
+  }, opts);
 }

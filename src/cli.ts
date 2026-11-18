@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { dirname, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { serve } from "@hono/node-server";
 import { createCMS, type Kernel } from "./kernel/cms.ts";
@@ -10,7 +11,10 @@ import { OWNER } from "./kernel/policy.ts";
 import { createApp } from "./gates/rest.ts";
 import { serveStdio } from "./gates/mcp.ts";
 import { VERSION } from "./gates/discovery.ts";
-import { loadProject } from "./load.ts";
+import { importFrom, loadProject } from "./load.ts";
+import { addModuleSource, listModuleCalls, removeModuleSource, type ModuleRef } from "./config-edit.ts";
+import { catalog, findCatalog } from "./modules/catalog.ts";
+import { isModule, moduleManifest, type ModuleDef } from "./kernel/modules.ts";
 import { generateTypes } from "./typegen.ts";
 
 const HELP = `aicms ${VERSION} — the CMS for AI agents
@@ -29,6 +33,15 @@ Agents
   agent revoke <name>           Revoke its tokens and reject its unmerged changes
   agent list                    Tokens and their agents
   mcp --agent <name>            Serve MCP over stdio for a local agent (or --token <t>)
+
+Modules
+  modules                       Installed modules, their permissions, and official ones to add
+  add <name|path|package>       Add a module: an official one (seo, search, media, i18n, git-sync),
+                                a local folder or an npm package; writes aicms.config.ts
+  remove <name>                 Take a module out of aicms.config.ts
+  module new <name>             Scaffold modules/<name>/module.ts and add it
+  sync export | import          git-sync: write content to Markdown, or draft file edits
+                                (--agent <name> to import as an agent, --submit to send for review)
 
 Review
   changes [--all]               Changesets waiting for review (--all: every recent one)
@@ -60,7 +73,47 @@ function fail(message: string): never {
 
 async function open(configPath?: string): Promise<Kernel> {
   const project = await loadProject(process.cwd(), configPath);
-  return createCMS(project.config, { cwd: project.root });
+  return createCMS(project.config, { cwd: project.root, configFile: project.file });
+}
+
+const camel = (s: string) => s.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+
+function printManifest(m: ReturnType<typeof moduleManifest>, indent = "  ") {
+  if (m.description) console.log(`${indent}${dim(m.description)}`);
+  const line = (label: string, items: string[]) => items.length && console.log(`${indent}${dim(label.padEnd(9))} ${items.join(", ")}`);
+  line("provides", m.provides);
+  line("requires", m.requires);
+  line("uses", m.uses.map((u) => (u === "*" ? "all models" : u)));
+  line("models", m.models.map((x) => x.name));
+  line("actions", m.actions.map((a) => `${a.name}${a.scope.includes(":") ? dim(` (${a.scope})`) : ""}`));
+  line("routes", m.routes);
+  line("hooks", m.hooks);
+}
+
+/** Resolve what `aicms add <target>` means: a catalog module, a local file/folder or an npm package. */
+async function resolveModule(root: string, configDir: string, target: string): Promise<{ ref: ModuleRef; def: ModuleDef; hint?: string }> {
+  const entry = findCatalog(target);
+  if (entry) {
+    const def = entry.create();
+    return { ref: { name: entry.importName, from: "aicms/modules", isDefault: false, call: `${entry.importName}()` }, def, hint: `Options: ${entry.example}` };
+  }
+  let specifier = target;
+  if (target.startsWith(".") || target.startsWith("/")) {
+    let file = resolve(process.cwd(), target);
+    if (existsSync(file) && statSync(file).isDirectory()) file = ["module.ts", "index.ts", "module.js", "index.js"].map((f) => join(file, f)).find(existsSync) ?? file;
+    if (!existsSync(file)) fail(`No module file at ${target}`);
+    specifier = "./" + relative(configDir, file).split("\\").join("/");
+    if (specifier.startsWith("./../")) specifier = specifier.slice(2);
+  } else {
+    console.log(dim(`npm install ${target}`));
+    const r = spawnSync("npm", ["install", target], { cwd: root, stdio: "inherit", shell: process.platform === "win32" });
+    if (r.status !== 0) fail(`npm install ${target} failed`);
+  }
+  const loaded = await importFrom(configDir, specifier.startsWith(".") ? resolve(configDir, specifier) : specifier);
+  const def = isModule(loaded) ? loaded : typeof loaded === "function" ? (loaded as () => ModuleDef)() : null;
+  if (!def || !isModule(def)) fail(`${target} doesn't export a module (defineModule) or a function that returns one`);
+  const name = camel(def.name);
+  return { ref: { name, from: specifier, isDefault: true, call: isModule(loaded) ? name : `${name}()` }, def };
 }
 
 const asOwner = (k: Kernel, name: string, input: unknown = {}) => k.call(name, input, { actor: OWNER, gate: "cli" });
@@ -103,6 +156,34 @@ export default defineConfig({
   agents: {
     writer: { scopes: ["post:draft", "tag:draft"], review: "human" },
     seo: { scopes: ["post:update.seo"], review: "auto" },
+  },
+})
+`;
+
+const MODULE_TEMPLATE = (name: string) => `import { action, defineModule, field } from "aicms"
+
+// A module is one file: what it provides, what it needs, its Actions and hooks.
+// Docs: https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.md#6-modules-like-lego
+export default defineModule({
+  name: "${name}",
+  description: "What this module does, in one sentence",
+  provides: ["${name}"],
+  uses: [],            // models this module may read and draft, e.g. ["post"]
+
+  actions: {
+    hello: action({
+      description: "Say hello. Agents read this text to decide when to call the tool.",
+      scope: "${name}:use",  // give agents this scope in aicms.config to see the tool
+      readOnly: true,
+      input: { name: field.text({ required: true }) },
+      run: ({ input }) => ({ message: \`Hello, \${input.name}!\` }),
+    }),
+  },
+
+  on: {
+    "changeset.merged": async ({ payload }) => {
+      // React to published changes: notify, reindex, sync…
+    },
   },
 })
 `;
@@ -172,6 +253,7 @@ async function main() {
       limit: { type: "string" },
       url: { type: "string" },
       out: { type: "string", short: "o" },
+      submit: { type: "boolean" },
       all: { type: "boolean" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -183,6 +265,74 @@ async function main() {
   if (!cmd || values.help || cmd === "help") return console.log(HELP);
 
   if (cmd === "init") return init(args[0] ?? ".");
+
+  if (cmd === "add" || cmd === "remove" || (cmd === "module" && args[0] === "new")) {
+    const project = await loadProject(process.cwd(), values.config);
+    const file = project.file;
+    const before = readFileSync(file, "utf8");
+    const installed = project.config.modules ?? [];
+    let next = before;
+    let added: ModuleDef | undefined;
+    let hint: string | undefined;
+
+    if (cmd === "add") {
+      if (!args[0]) fail(`Usage: aicms add <name|path|package>. Official modules: ${catalog.map((c) => c.name).join(", ")}`);
+      const { ref, def, hint: h } = await resolveModule(project.root, dirname(file), args[0]);
+      if (installed.some((m) => m.name === def.name)) fail(`Module "${def.name}" is already in aicms.config`);
+      // Lego: pull in official modules that provide what this one requires.
+      const provided = new Set(installed.flatMap((m) => m.provides ?? []));
+      for (const cap of def.requires ?? []) {
+        if (provided.has(cap)) continue;
+        const dep = catalog.find((c) => (c.create().provides ?? []).includes(cap));
+        if (!dep) fail(`"${def.name}" requires "${cap}", and no installed or official module provides it`);
+        next = addModuleSource(next, { name: dep.importName, from: "aicms/modules", isDefault: false, call: `${dep.importName}()` });
+        console.log(`${green("+")} ${bold(dep.name)} ${dim(`(provides ${cap}, required by ${def.name})`)}`);
+      }
+      next = addModuleSource(next, ref);
+      added = def;
+      hint = h;
+    } else if (cmd === "remove") {
+      if (!args[0]) fail("Usage: aicms remove <name>");
+      const mod = installed.find((m) => m.name === args[0] || m.name === findCatalog(args[0])?.name);
+      if (!mod) fail(`No module "${args[0]}" in aicms.config. Installed: ${installed.map((m) => m.name).join(", ") || "none"}`);
+      const dependents = installed.filter((m) => m !== mod && (m.requires ?? []).some((cap) => (mod.provides ?? []).includes(cap)));
+      if (dependents.length) fail(`${dependents.map((m) => m.name).join(", ")} require what ${mod.name} provides; remove them first`);
+      const calls = listModuleCalls(before);
+      const ident = [findCatalog(mod.name)?.importName, camel(mod.name), mod.name].find((n) => n && calls.some((c) => c === n || c.startsWith(`${n}(`)));
+      if (!ident) fail(`Couldn't find ${mod.name} in the modules array of ${relative(process.cwd(), file)}; remove it by hand`);
+      next = removeModuleSource(before, ident);
+    } else {
+      const name = args[1];
+      if (!name || !/^[a-z][a-z0-9-]*$/.test(name)) fail("Usage: aicms module new <name> (lowercase letters, digits, hyphens)");
+      const dir = join(project.root, "modules", name);
+      const path = join(dir, "module.ts");
+      if (existsSync(path)) fail(`${relative(process.cwd(), path)} already exists`);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path, MODULE_TEMPLATE(name));
+      console.log(`${green("✓")} Created ${bold(relative(process.cwd(), path))}`);
+      next = addModuleSource(before, { name: camel(name), from: `./modules/${name}/module.ts`, isDefault: true, call: camel(name) });
+    }
+
+    writeFileSync(file, next);
+    // Make sure the project still starts; put the file back if it doesn't.
+    try {
+      const check = await loadProject(process.cwd(), values.config);
+      const k = await createCMS(check.config, { cwd: check.root, configFile: check.file });
+      await k.close();
+    } catch (e) {
+      writeFileSync(file, before);
+      fail(`aicms.config was left unchanged: ${e instanceof Error ? e.message : e}`);
+    }
+    if (cmd === "remove") console.log(`${green("✓")} Removed ${bold(args[0])} from ${relative(process.cwd(), file)} ${dim("(its data stays in the database)")}`);
+    else if (added) {
+      console.log(`${green("✓")} Added ${bold(added.name)} to ${relative(process.cwd(), file)}`);
+      printManifest(moduleManifest(added));
+      const scopes = moduleManifest(added).scopes;
+      if (scopes.length) console.log(`\n${dim("Give agents these scopes in aicms.config to use it:")} ${scopes.join(", ")}`);
+      if (hint) console.log(dim(hint));
+    }
+    return;
+  }
 
   const k = await open(values.config);
 
@@ -265,6 +415,45 @@ async function main() {
       await asOwner(k, "cms.submit", { note: `Revert ${args[0]}` });
       console.log(`${green("✓")} Reverted ${bold(args[0])}`);
       for (const i of d.items) console.log(`  ${i.op.padEnd(6)} ${dim(i.id)}`);
+      break;
+    }
+
+    case "modules": {
+      const res: any = await asOwner(k, "cms.modules");
+      if (values.json) console.log(JSON.stringify(res, null, 2));
+      else {
+        console.log(bold(`Installed (${res.installed.length})`));
+        if (!res.installed.length) console.log(dim("  none"));
+        for (const m of res.installed) {
+          console.log(`\n  ${bold(m.name)}${m.version ? dim(` v${m.version}`) : ""}`);
+          printManifest(m, "    ");
+        }
+        if (res.available.length) {
+          console.log(`\n${bold("Official, not installed")}`);
+          for (const m of res.available) console.log(`  ${bold(m.name.padEnd(9))} ${m.summary}  ${dim(`aicms add ${m.name}`)}`);
+        }
+      }
+      break;
+    }
+
+    case "sync": {
+      const sub = args[0];
+      if (sub !== "export" && sub !== "import") fail("Usage: aicms sync export | import [--agent <name>] [--submit]");
+      if (!k.modules.some((m) => m.name === "git-sync")) fail("git-sync isn't installed. Run: aicms add git-sync");
+      const actor = values.agent ? k.actor(values.agent) : OWNER;
+      const r: any = await k.call(`git-sync.${sub}`, {}, { actor, gate: "cli" });
+      if (sub === "export") console.log(`${green("✓")} Wrote ${r.files} file(s) to ${bold(r.dir)}`);
+      else {
+        console.log(`${green("✓")} ${r.created.length} new, ${r.updated.length} changed, ${r.unchanged} unchanged`);
+        for (const f of r.created) console.log(`  ${green("+")} ${f}`);
+        for (const f of r.updated) console.log(`  ${yellow("~")} ${f}`);
+        for (const e of r.errors) console.log(red(`  ! ${e.file}: ${e.message}`));
+        if ((r.created.length || r.updated.length) && values.submit) {
+          const s2: any = await k.call("cms.submit", { note: "Import from Markdown files" }, { actor, gate: "cli" });
+          console.log(`${green("✓")} ${s2.status === "merged" ? "Merged" : s2.status === "submitted" ? `Sent for review as ${bold(s2.changeset)}` : "Checks failed"}`);
+          for (const i of s2.issues ?? []) console.log(red(`  ! ${i.entry}${i.field ? `.${i.field}` : ""}: ${i.message}`));
+        } else if (r.created.length || r.updated.length) console.log(dim("Drafted. Add --submit to send them for review."));
+      }
       break;
     }
 

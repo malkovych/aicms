@@ -5,6 +5,9 @@ import { slugify } from "../schema/slug.ts";
 import { applyPatch } from "../store/sqlite.ts";
 import { ConflictError, type ChangesetItem, type ChangesetRow, type CheckIssue, type EntryRow } from "../store/types.ts";
 import { AicmsError } from "./errors.ts";
+import { findCatalog } from "../modules/catalog.ts";
+import { catalogEntry, installFromCatalog } from "./install.ts";
+import { moduleManifest } from "./modules.ts";
 import { modelPermissions, type Actor } from "./policy.ts";
 import type { Kernel } from "./cms.ts";
 
@@ -184,8 +187,16 @@ export async function checkChangeset(k: Kernel, cs: ChangesetRow): Promise<Check
   const seen = new Map<string, string>();
 
   for (const item of cs.items) {
-    const model = k.models.get(item.model);
     const add = (message: string, field?: string) => issues.push({ entry: item.id, model: item.model, ...(field ? { field } : {}), message });
+    if (item.op === "install") {
+      try {
+        catalogEntry(k, item.id);
+      } catch (e) {
+        add(e instanceof Error ? e.message : String(e));
+      }
+      continue;
+    }
+    const model = k.models.get(item.model);
     if (!model) { add(`Model "${item.model}" no longer exists`); continue; }
 
     let current: EntryRow | null = null;
@@ -288,6 +299,7 @@ export async function mergeChangeset(k: Kernel, id: string, by: string) {
   };
 
   const issues = await checkChangeset(k, cs);
+  if (cs.items.some((i) => i.op === "install")) return mergeInstall(k, cs, by, issues);
   if (issues.length) await sendBack(issues);
 
   let entries: EntryRow[];
@@ -308,9 +320,62 @@ export async function mergeChangeset(k: Kernel, id: string, by: string) {
   return summary;
 }
 
+/** A module proposal: install each module, then record the changeset as merged. */
+async function mergeInstall(k: Kernel, cs: ChangesetRow, by: string, issues: CheckIssue[]) {
+  if (issues.length) {
+    cs.status = "rejected";
+    cs.issues = issues;
+    cs.comment = issues.map((i) => i.message).join("; ");
+    cs.updatedAt = now();
+    await k.store.saveChangeset(cs);
+    throw new AicmsError("conflict", `Can't install: ${cs.comment}`, { issues });
+  }
+  const installed = [];
+  for (const item of cs.items) installed.push(await installFromCatalog(k, item.id));
+  const at = now();
+  cs.status = "merged";
+  cs.mergedAt = at;
+  cs.mergedBy = by;
+  cs.updatedAt = at;
+  cs.reviewReason = undefined;
+  await k.store.saveChangeset(cs);
+  const summary = { changeset: cs.id, actor: cs.actor, mergedBy: by, entries: [], modules: installed.map((i) => i.module), installed };
+  await k.emit("changeset.merged", summary);
+  return summary;
+}
+
+/** An agent's request to install a catalog module; it waits in the Inbox for a person. */
+export async function proposeModule(k: Kernel, actor: Actor, name: string, reason: string) {
+  const entry = catalogEntry(k, name);
+  const pending = await k.store.listChangesets({ status: ["submitted"], limit: 500 });
+  if (pending.some((cs) => cs.items.some((i) => i.op === "install" && i.id === entry.name))) throw new AicmsError("conflict", `Installing "${entry.name}" is already waiting for review`);
+  const at = now();
+  const cs: ChangesetRow = {
+    id: newId("cs"),
+    actor: actor.id,
+    status: "submitted",
+    note: reason,
+    reviewReason: "Installing a module is decided by a person",
+    items: [{ op: "install", model: "", id: entry.name, locale: "" }],
+    issues: [],
+    createdAt: at,
+    updatedAt: at,
+  };
+  await k.store.createChangeset(cs);
+  await k.emit("changeset.submitted", summarize(cs));
+  return {
+    status: "submitted",
+    changeset: cs.id,
+    module: moduleManifest(entry.create()),
+    next: "A person will see what the module may do and decide. Check cms_changes for the answer.",
+  };
+}
+
 export async function rejectChangeset(k: Kernel, id: string, by: string, comment: string, final = false) {
   const cs = await k.store.getChangeset(id);
   if (!cs) throw new AicmsError("not_found", `No changeset ${id}`);
+  // A module proposal never reopens: it would turn into the agent's content draft.
+  if (cs.items.some((i) => i.op === "install")) final = true;
   if (cs.status !== "submitted" && cs.status !== "open") throw new AicmsError("invalid", `Changeset ${id} is already ${cs.status}`);
   const otherOpen = await k.store.findOpenChangeset(cs.actor);
   const reopen = !final && (!otherOpen || otherOpen.id === cs.id);
@@ -341,6 +406,11 @@ export function summarize(cs: ChangesetRow) {
 export async function diffChangeset(k: Kernel, cs: ChangesetRow) {
   const items = [];
   for (const item of cs.items) {
+    if (item.op === "install") {
+      const entry = findCatalog(item.id);
+      items.push({ op: item.op, model: "module", id: item.id, title: entry?.title ?? item.id, summary: entry?.summary, module: entry ? moduleManifest(entry.create()) : null, changes: [] });
+      continue;
+    }
     const model = k.models.get(item.model);
     const current = item.op === "create" ? null : await k.store.getEntry(item.id);
     const before = model && current ? projectData(model, current.data, "markdown") : {};

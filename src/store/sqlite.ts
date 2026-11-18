@@ -9,6 +9,9 @@ import {
   type EventRow,
   type IndexSpec,
   type ListQuery,
+  type MediaRow,
+  type TextDoc,
+  type TextHit,
   type Store,
   type TokenKind,
   type TokenRow,
@@ -104,8 +107,31 @@ CREATE TABLE IF NOT EXISTS media (
   alt TEXT,
   meta TEXT,
   created_at TEXT NOT NULL,
-  created_by TEXT NOT NULL
+  created_by TEXT NOT NULL,
+  filename TEXT
 );
+
+CREATE TABLE IF NOT EXISTS kv (
+  scope TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (scope, key)
+);
+
+CREATE TABLE IF NOT EXISTS text_docs (
+  id TEXT PRIMARY KEY,
+  model TEXT NOT NULL,
+  locale TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS text_terms (
+  term TEXT NOT NULL,
+  doc TEXT NOT NULL,
+  tf REAL NOT NULL,
+  PRIMARY KEY (term, doc)
+);
+CREATE INDEX IF NOT EXISTS text_terms_doc ON text_terms(doc);
 
 CREATE TABLE IF NOT EXISTS tokens (
   id TEXT PRIMARY KEY,
@@ -122,6 +148,7 @@ CREATE TABLE IF NOT EXISTS tokens (
 const MIGRATIONS: [string, string, string][] = [
   ["tokens", "kind", "TEXT NOT NULL DEFAULT 'agent'"],
   ["tokens", "expires_at", "TEXT"],
+  ["media", "filename", "TEXT"],
 ];
 
 type Row = Record<string, SQLInputValue>;
@@ -385,6 +412,149 @@ export class SqliteStore implements Store {
       "SELECT actor, MAX(at) AS last_at, SUM(CASE WHEN at >= ? THEN 1 ELSE 0 END) AS recent FROM events GROUP BY actor",
       sinceIso,
     ).map((r) => ({ actor: r.actor as string, lastAt: r.last_at as string, recent: Number(r.recent ?? 0) }));
+  }
+
+  // ---------- module storage ----------
+
+  async kvGet(scope: string, key: string) {
+    const r = this.get("SELECT value FROM kv WHERE scope = ? AND key = ?", scope, key);
+    return r ? JSON.parse(r.value as string) : undefined;
+  }
+
+  async kvSet(scope: string, key: string, value: unknown) {
+    this.run("INSERT INTO kv (scope, key, value) VALUES (?, ?, ?) ON CONFLICT(scope, key) DO UPDATE SET value = excluded.value", scope, key, JSON.stringify(value));
+  }
+
+  async kvDelete(scope: string, key: string) {
+    this.run("DELETE FROM kv WHERE scope = ? AND key = ?", scope, key);
+  }
+
+  async kvList(scope: string, prefix = "") {
+    return this.all("SELECT key, value FROM kv WHERE scope = ? AND key >= ? AND key < ? ORDER BY key", scope, prefix, prefix + "\uffff").map((r) => ({
+      key: r.key as string,
+      value: JSON.parse(r.value as string),
+    }));
+  }
+
+  // ---------- full-text index ----------
+  // A small inverted index in plain tables, so search works on every Node build
+  // (node:sqlite ships without FTS). Scoring is TF-IDF; title terms are weighted up front.
+
+  async textUpsert(doc: TextDoc) {
+    this.tx(() => {
+      this.run("DELETE FROM text_terms WHERE doc = ?", doc.id);
+      this.run(
+        "INSERT INTO text_docs (id, model, locale, title, body) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET model = excluded.model, locale = excluded.locale, title = excluded.title, body = excluded.body",
+        doc.id, doc.model, doc.locale, doc.title, doc.body,
+      );
+      const insert = this.db.prepare("INSERT INTO text_terms (term, doc, tf) VALUES (?, ?, ?)");
+      for (const [term, tf] of Object.entries(doc.terms)) insert.run(term, doc.id, tf);
+    });
+  }
+
+  async textRemove(id: string) {
+    this.tx(() => {
+      this.run("DELETE FROM text_terms WHERE doc = ?", id);
+      this.run("DELETE FROM text_docs WHERE id = ?", id);
+    });
+  }
+
+  async textSearch(q: { terms: string[]; prefixLast: boolean; models: string[]; locale?: string; limit: number }): Promise<TextHit[]> {
+    if (!q.terms.length || !q.models.length) return [];
+    const total = Number(this.get("SELECT COUNT(*) AS n FROM text_docs")?.n ?? 0) || 1;
+    const scores = new Map<string, { score: number; matched: number }>();
+    q.terms.forEach((term, i) => {
+      const prefix = q.prefixLast && i === q.terms.length - 1;
+      const rows = prefix
+        ? this.all("SELECT term, doc, tf FROM text_terms WHERE term >= ? AND term < ?", term, term + "\uffff")
+        : this.all("SELECT term, doc, tf FROM text_terms WHERE term = ?", term);
+      const df = new Set(rows.map((r) => r.doc)).size || 1;
+      const idf = Math.log(1 + total / df);
+      const best = new Map<string, number>();
+      for (const r of rows) best.set(r.doc as string, Math.max(best.get(r.doc as string) ?? 0, Number(r.tf)));
+      for (const [doc, tf] of best) {
+        const s = scores.get(doc) ?? { score: 0, matched: 0 };
+        s.score += (1 + Math.log(tf)) * idf;
+        s.matched += 1;
+        scores.set(doc, s);
+      }
+    });
+    if (!scores.size) return [];
+    const ids = [...scores.keys()];
+    const out: TextHit[] = [];
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      const params: SQLInputValue[] = [...chunk, ...q.models];
+      let sql = `SELECT * FROM text_docs WHERE id IN (${chunk.map(() => "?").join(",")}) AND model IN (${q.models.map(() => "?").join(",")})`;
+      if (q.locale) { sql += " AND locale = ?"; params.push(q.locale); }
+      for (const r of this.all(sql, ...params)) {
+        const s = scores.get(r.id as string)!;
+        out.push({ id: r.id as string, model: r.model as string, locale: r.locale as string, title: r.title as string, body: r.body as string, score: s.score, matched: s.matched });
+      }
+    }
+    // Documents that match every term come first, then by score.
+    return out.sort((a, b) => b.matched - a.matched || b.score - a.score).slice(0, q.limit);
+  }
+
+  async textCount() {
+    return Number(this.get("SELECT COUNT(*) AS n FROM text_docs")?.n ?? 0);
+  }
+
+  async textClear() {
+    this.db.exec("DELETE FROM text_terms; DELETE FROM text_docs;");
+  }
+
+  // ---------- media ----------
+
+  private mediaFrom(r: Row): MediaRow {
+    return {
+      id: r.id as string,
+      url: r.url as string,
+      filename: (r.filename as string) ?? "",
+      mime: (r.mime as string) ?? "application/octet-stream",
+      size: Number(r.size ?? 0),
+      ...(r.width != null ? { width: Number(r.width) } : {}),
+      ...(r.height != null ? { height: Number(r.height) } : {}),
+      ...(r.alt ? { alt: r.alt as string } : {}),
+      ...(r.meta ? { meta: JSON.parse(r.meta as string) } : {}),
+      createdAt: r.created_at as string,
+      createdBy: r.created_by as string,
+    };
+  }
+
+  async createMedia(m: MediaRow) {
+    this.run(
+      "INSERT INTO media (id, url, filename, mime, size, width, height, alt, meta, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      m.id, m.url, m.filename, m.mime, m.size, toSql(m.width), toSql(m.height), toSql(m.alt), toSql(m.meta), m.createdAt, m.createdBy,
+    );
+  }
+
+  async getMedia(id: string) {
+    const r = this.get("SELECT * FROM media WHERE id = ?", id);
+    return r ? this.mediaFrom(r) : null;
+  }
+
+  async listMedia(q: { query?: string; missingAlt?: boolean; limit: number; offset: number }) {
+    const where: string[] = [];
+    const params: SQLInputValue[] = [];
+    if (q.query) { where.push("(filename LIKE ? OR alt LIKE ?)"); params.push(`%${q.query}%`, `%${q.query}%`); }
+    if (q.missingAlt) where.push("(alt IS NULL OR alt = '')");
+    const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const total = Number(this.get(`SELECT COUNT(*) AS n FROM media ${clause}`, ...params)?.n ?? 0);
+    const items = this.all(`SELECT * FROM media ${clause} ORDER BY created_at DESC LIMIT ? OFFSET ?`, ...params, q.limit, q.offset).map((r) => this.mediaFrom(r));
+    return { items, total };
+  }
+
+  async updateMedia(id: string, patch: Partial<Pick<MediaRow, "alt" | "meta">>) {
+    const current = await this.getMedia(id);
+    if (!current) return null;
+    const next = { ...current, ...patch };
+    this.run("UPDATE media SET alt = ?, meta = ? WHERE id = ?", toSql(next.alt || null), toSql(next.meta), id);
+    return next;
+  }
+
+  async deleteMedia(id: string) {
+    return Number(this.run("DELETE FROM media WHERE id = ?", id).changes) > 0;
   }
 
   async createToken(t: TokenRow) {

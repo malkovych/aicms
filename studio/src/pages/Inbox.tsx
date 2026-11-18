@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { cms, errorMessage, humanize, isChangesetEvent, titleField, useApi, useLive, useModel, useSite } from "../api.tsx";
+import { cms, errorMessage, humanize, isChangesetEvent, titleField, useApi, useLive, useModel, useModules, useSite, type ModuleManifest } from "../api.tsx";
+import { ManifestView } from "./Modules.tsx";
 import { FieldDiff } from "../diff.tsx";
 import { useT, type Key } from "../i18n.tsx";
 import { Link, navigate } from "../router.tsx";
@@ -9,7 +10,7 @@ import { Avatar, Button, Empty, ErrorBox, Icon, item, list, Pill, Skeleton, Time
 type Status = "submitted" | "open" | "merged" | "rejected";
 
 interface Change { field: string; before: unknown; after: unknown }
-interface Item { op: "create" | "update" | "delete"; model: string; id: string; title?: string; changes: Change[] }
+interface Item { op: "create" | "update" | "delete" | "install"; model: string; id: string; title?: string; summary?: string; module?: ModuleManifest | null; changes: Change[] }
 interface Changeset {
   id: string;
   actor: string;
@@ -23,7 +24,7 @@ interface Changeset {
 }
 
 const TABS: Status[] = ["submitted", "open", "merged", "rejected"];
-const OP_TONE = { create: "human", update: "core", delete: "gate" } as const;
+const OP_TONE = { create: "human", update: "core", delete: "gate", install: "mod" } as const;
 
 export function Inbox({ selected }: { selected?: string }) {
   const { t } = useT();
@@ -91,7 +92,7 @@ function SelectedElsewhere({ id }: { id: string }) {
 }
 
 function opSummary(items: Item[]) {
-  const counts = { create: 0, update: 0, delete: 0 };
+  const counts = { create: 0, update: 0, delete: 0, install: 0 };
   for (const i of items) counts[i.op]++;
   return counts;
 }
@@ -110,7 +111,7 @@ function ChangesetCard({ cs, active }: { cs: Changeset; active: boolean }) {
           </div>
           <div className="card-title">{cs.note || cs.items.map((i) => i.title || i.id).slice(0, 3).join(" · ")}</div>
           <div className="card-ops">
-            {(["create", "update", "delete"] as const).map((op) => counts[op] ? <Pill key={op} tone={OP_TONE[op]}>{t(`op.${op}`)} · {counts[op]}</Pill> : null)}
+            {(["install", "create", "update", "delete"] as const).map((op) => counts[op] ? <Pill key={op} tone={OP_TONE[op]}>{t(`op.${op}`)} · {counts[op]}</Pill> : null)}
             {!!cs.issues?.length && <Pill tone="gate"><Icon name="alert" size={12} /> {cs.issues.length}</Pill>}
           </div>
         </div>
@@ -123,6 +124,8 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
   const { t } = useT();
   const toast = useToast();
   const { reload: reloadSite } = useSite();
+  const { reload: reloadModules } = useModules();
+  const installs = cs.items.some((i) => i.op === "install");
   const [busy, setBusy] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [comment, setComment] = useState("");
@@ -134,6 +137,7 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
     try {
       toast(await fn(), "human");
       reloadSite();
+      if (installs) reloadModules();
       onDone(goNext ? next : undefined);
     } catch (e) {
       toast(errorMessage(e), "gate");
@@ -144,7 +148,7 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
 
   const approve = () => run("merge", async () => {
     const r = await cms.merge(cs.id);
-    return t("inbox.published", { n: r.entries.length });
+    return r.modules?.length ? t("modules.installedToast", { name: r.modules.join(", ") }) : t("inbox.published", { n: r.entries.length });
   });
   const reject = () => run("reject", async () => {
     await cms.reject(cs.id, comment.trim(), { final });
@@ -187,7 +191,19 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
       )}
 
       <motion.div className="items" variants={list} initial="initial" animate="enter">
-        {cs.items.map((it) => (
+        {cs.items.map((it) => it.op === "install" ? (
+          <motion.section key={it.id} className="change change-install" variants={item}>
+            <header className="change-head">
+              <Pill tone="mod">{t("op.install")}</Pill>
+              <span className="change-title">{it.title ?? it.id}</span>
+              <span className="muted small mono">aicms add {it.id}</span>
+            </header>
+            <div className="install-body">
+              <p className="muted">{it.summary ?? t("inbox.installWhy")}</p>
+              {it.module && <ManifestView m={it.module} />}
+            </div>
+          </motion.section>
+        ) : (
           <motion.section key={it.id} className={`change change-${it.op}`} variants={item}>
             <header className="change-head">
               <Pill tone={OP_TONE[it.op]}>{t(`op.${it.op}`)}</Pill>
@@ -219,14 +235,14 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
               </motion.div>
             ) : (
               <motion.div key="buttons" className="row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <Button tone="approve" icon="check" busy={busy === "merge"} disabled={!!cs.issues?.length} onClick={approve}>{t("inbox.approve")}</Button>
+                <Button tone="approve" icon="check" busy={busy === "merge"} disabled={!!cs.issues?.length} onClick={approve}>{installs ? t("inbox.installApprove") : t("inbox.approve")}</Button>
                 <Button icon="undo" onClick={() => setAsking(true)}>{t("inbox.request")}</Button>
               </motion.div>
             )}
           </AnimatePresence>
         </footer>
       )}
-      {cs.status === "merged" && (
+      {cs.status === "merged" && !installs && (
         <footer className="decide">
           <Button icon="undo" busy={busy === "revert"} onClick={revert}>{t("inbox.revert")}</Button>
         </footer>

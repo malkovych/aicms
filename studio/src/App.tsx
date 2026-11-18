@@ -1,11 +1,13 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { cms, isChangesetEvent, LiveProvider, SiteProvider, useApi, useLive, useLiveStatus, useSite, type SiteInfo } from "./api.tsx";
+import { cms, isChangesetEvent, LiveProvider, ModulesProvider, SiteProvider, useApi, useLive, useLiveStatus, useModules, useSite, type SiteInfo } from "./api.tsx";
 import { useT } from "./i18n.tsx";
 import { Activity } from "./pages/Activity.tsx";
 import { Agents } from "./pages/Agents.tsx";
 import { ContentList, EntryEditor } from "./pages/Content.tsx";
 import { Inbox } from "./pages/Inbox.tsx";
+import { Media } from "./pages/Media.tsx";
+import { Modules } from "./pages/Modules.tsx";
 import { Link, match, usePath } from "./router.tsx";
 import { ErrorBox, Icon, page, Skeleton } from "./ui.tsx";
 
@@ -17,7 +19,9 @@ export function App() {
   return (
     <SiteProvider site={site.data} reload={site.reload}>
       <LiveProvider>
-        <Shell />
+        <ModulesProvider>
+          <Shell />
+        </ModulesProvider>
       </LiveProvider>
     </SiteProvider>
   );
@@ -73,18 +77,22 @@ function Shell() {
   const { t, toggle, lang } = useT();
   const { site, reload } = useSite();
   const live = useLiveStatus();
+  const mods = useModules();
   const [theme, flipTheme] = useTheme();
   const waiting = useApi(() => cms.review() as Promise<{ changesets: unknown[] }>, []);
-  useLive(isChangesetEvent, () => {
+  useLive(isChangesetEvent, (e) => {
     waiting.reload();
     reload();
+    if (e.payload?.modules?.length) mods.reload();
   }, 600);
 
   const section = path.split("/")[1] || "inbox";
   const nav = [
     { to: "/", key: "inbox", icon: "inbox", label: t("nav.inbox"), badge: waiting.data?.changesets.length },
     { to: site.models[0] ? `/content/${site.models[0].name}` : "/content", key: "content", icon: "content", label: t("nav.content") },
+    ...(mods.has("media") ? [{ to: "/media", key: "media", icon: "media", label: t("nav.media") }] : []),
     { to: "/agents", key: "agents", icon: "agents", label: t("nav.agents") },
+    { to: "/modules", key: "modules", icon: "modules", label: t("nav.modules") },
     { to: "/activity", key: "activity", icon: "activity", label: t("nav.activity") },
   ];
 
@@ -95,6 +103,8 @@ function Shell() {
   else if ((params = match("/content/:model", path))) view = <ContentList model={params.model} />;
   else if (path === "/agents") view = <Agents />;
   else if (path === "/activity") view = <Activity />;
+  else if (path === "/modules") view = <Modules />;
+  else if (path === "/media") view = <Media />;
   else if ((params = match("/inbox/:id", path))) view = <Inbox selected={params.id} />;
   else view = <Inbox />;
 

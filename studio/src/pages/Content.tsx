@@ -1,8 +1,9 @@
 import { blocksToHtml } from "@aicms/client";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { markdownToBlocks } from "../../../src/schema/markdown.ts";
-import { AicmsClientError, cms, errorMessage, humanize, titleField, useApi, useLive, useModel, useSite, type FieldInfo, type ModelInfo } from "../api.tsx";
+import { AicmsClientError, cms, errorMessage, humanize, titleField, useApi, useLive, useModel, useModules, useSite, type FieldInfo, type ModelInfo } from "../api.tsx";
+import { MediaPicker, uploadFiles } from "./Media.tsx";
 import { show } from "../diff.tsx";
 import { useT } from "../i18n.tsx";
 import { Link, navigate } from "../router.tsx";
@@ -277,6 +278,9 @@ export function EntryEditor({ model, id }: { model: string; id?: string }) {
             {id && !missing && <Button tone="quiet" icon="trash" className="danger-text" onClick={() => setConfirmDelete(true)}>{t("entry.delete")}</Button>}
           </section>
 
+          {id && !missing && <SeoPanel model={model} id={id} version={entry.data?.version} />}
+          {id && !missing && entry.data && <TranslationsPanel model={model} id={id} version={entry.data.version} />}
+
           {id && (
             <section className="plate side-card">
               <h3><Icon name="history" size={16} /> {t("entry.history")}</h3>
@@ -474,14 +478,39 @@ function BlocksInput({ value, onChange, allowed }: { value: string; onChange(v: 
 
 function MediaInput({ value, onChange }: { value: { url: string; alt: string }; onChange(v: unknown): void }) {
   const { t } = useT();
+  const toast = useToast();
+  const { has } = useModules();
+  const [picking, setPicking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const file = useRef<HTMLInputElement>(null);
   const v = value ?? { url: "", alt: "" };
+  const library = has("media");
+  const upload = async (files: File[]) => {
+    setBusy(true);
+    try {
+      const [row] = await uploadFiles(files.slice(0, 1));
+      onChange({ url: row.url, alt: v.alt || row.alt || "" });
+    } catch (e) {
+      toast(errorMessage(e), "gate");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="media-input">
-      {v.url && <img src={v.url} alt={v.alt} className="media-thumb" />}
+      {v.url ? <img src={v.url} alt={v.alt} className="media-thumb" /> : <span className="media-thumb media-thumb-empty"><Icon name="media" size={22} /></span>}
       <div className="media-fields">
         <input className="input" placeholder={t("field.url")} value={v.url} onChange={(e) => onChange({ ...v, url: e.target.value })} />
         <input className="input" placeholder={t("field.alt")} value={v.alt} onChange={(e) => onChange({ ...v, alt: e.target.value })} />
+        {library && (
+          <div className="row">
+            <Button icon="media" onClick={() => setPicking(true)}>{t("media.pick")}</Button>
+            <Button tone="quiet" icon="upload" busy={busy} onClick={() => file.current?.click()}>{t("media.upload")}</Button>
+            <input ref={file} type="file" hidden accept="image/*,.svg" onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ""; if (f.length) upload(f); }} />
+          </div>
+        )}
       </div>
+      {library && <MediaPicker open={picking} onClose={() => setPicking(false)} onPick={(m) => { onChange({ url: m.url, alt: v.alt || m.alt || "" }); setPicking(false); }} />}
     </div>
   );
 }
@@ -547,5 +576,102 @@ function RefInput({ f, value, onChange }: { f: FieldInfo; value: unknown; onChan
         {items.filter((e) => !selected.includes(e.id)).map((e) => <option key={e.id} value={e.id}>{name(e.id)}</option>)}
       </select>
     </div>
+  );
+}
+
+// ---------- module panels ----------
+
+interface Audit {
+  score: number;
+  issues: { level: "error" | "warning" | "tip"; field?: string; message: string }[];
+  stats: { words: number };
+}
+
+/** SEO score and fixes for this entry, when the seo module is installed and covers the model. */
+function SeoPanel({ model, id, version }: { model: string; id: string; version?: number }) {
+  const { t } = useT();
+  const { has } = useModules();
+  const on = has("seo");
+  const audit = useApi(() => (on ? cms.call<Audit>("seo.audit", { model, id }) : Promise.resolve(undefined)), [on, model, id, version]);
+  if (!on || audit.error || (!audit.data && !audit.loading)) return null;
+  const score = audit.data?.score ?? 0;
+  const tone = score >= 80 ? "human" : score >= 50 ? "mod" : "gate";
+  return (
+    <section className="plate side-card">
+      <h3><Icon name="search" size={16} /> {t("seo.title")}</h3>
+      {!audit.data ? <Skeleton rows={2} /> : (
+        <>
+          <div className="seo-score">
+            <span className={`seo-num tone-${tone}`}>{score}</span>
+            <div className="meter grow" aria-label={`${score}/100`}>
+              <motion.span className={`meter-${tone}`} initial={{ width: 0 }} animate={{ width: `${score}%` }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} />
+            </div>
+          </div>
+          {audit.data.issues.length ? (
+            <ul className="seo-issues">
+              {audit.data.issues.map((i, n) => (
+                <li key={n}><span className={`dot dot-${i.level}`} aria-hidden="true" /><span>{i.message}</span></li>
+              ))}
+            </ul>
+          ) : <p className="muted small">{t("seo.ok")}</p>}
+          <div className="row">
+            <span className="muted small">{t("seo.words", { n: audit.data.stats.words })}</span>
+            <Button tone="quiet" icon="history" busy={audit.loading} onClick={audit.reload}>{t("seo.check")}</Button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+interface Translations {
+  locale: string;
+  translations: Record<string, { id: string; title: string; published: boolean } | null>;
+  missing: string[];
+}
+
+/** Linked versions of this entry in other locales, when the i18n module is installed. */
+function TranslationsPanel({ model, id, version }: { model: string; id: string; version: number }) {
+  const { t } = useT();
+  const toast = useToast();
+  const { has } = useModules();
+  const { site, reload: reloadSite } = useSite();
+  const on = has("i18n") && site.locales.length > 1;
+  const data = useApi(() => (on ? cms.call<Translations>("i18n.translations", { id }) : Promise.resolve(undefined)), [on, id, version]);
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!on || data.error || !data.data) return null;
+  const create = async (locale: string) => {
+    setBusy(locale);
+    try {
+      const d = await cms.call<{ id: string }>("i18n.translate", { id, locale });
+      await cms.submit(`Translation of ${id} into ${locale}`);
+      toast(t("tr.created", { locale }));
+      reloadSite();
+      navigate(`/content/${model}/${d.id}`);
+    } catch (e) {
+      toast(errorMessage(e), "gate");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section className="plate side-card">
+      <h3><Icon name="globe" size={16} /> {t("tr.title")}</h3>
+      <ul className="tr-list">
+        {site.locales.map((locale) => {
+          const e = data.data!.translations[locale];
+          return (
+            <li key={locale}>
+              <Pill tone={e ? "core" : "adapt"}>{locale}</Pill>
+              {e ? (
+                e.id === id ? <span className="muted small">{t("tr.this")}</span> : <Link to={`/content/${model}/${e.id}`} className="tr-link">{e.title || e.id}</Link>
+              ) : (
+                <Button tone="quiet" icon="plus" busy={busy === locale} onClick={() => create(locale)}>{t("tr.create", { locale })}</Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

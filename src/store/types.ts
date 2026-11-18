@@ -26,7 +26,8 @@ export interface VersionRow {
 export type ChangesetStatus = "open" | "submitted" | "merged" | "rejected";
 
 export interface ChangesetItem {
-  op: "create" | "update" | "delete";
+  /** `install` items carry a module proposal (`id` is the module name, `data.options` its options). */
+  op: "create" | "update" | "delete" | "install";
   model: string;
   id: string;
   locale: string;
@@ -117,6 +118,26 @@ export interface Store {
   /** Last call and number of calls since `sinceIso`, per actor. */
   actorStats(sinceIso: string): Promise<{ actor: string; lastAt: string; recent: number }[]>;
 
+  // ---- module storage: small JSON values per module ----
+  kvGet(scope: string, key: string): Promise<unknown>;
+  kvSet(scope: string, key: string, value: unknown): Promise<void>;
+  kvDelete(scope: string, key: string): Promise<void>;
+  kvList(scope: string, prefix?: string): Promise<{ key: string; value: unknown }[]>;
+
+  // ---- full-text index (used by the search module) ----
+  textUpsert(doc: TextDoc): Promise<void>;
+  textRemove(id: string): Promise<void>;
+  textSearch(q: { terms: string[]; prefixLast: boolean; models: string[]; locale?: string; limit: number }): Promise<TextHit[]>;
+  textCount(): Promise<number>;
+  textClear(): Promise<void>;
+
+  // ---- media library (used by the media module) ----
+  createMedia(row: MediaRow): Promise<void>;
+  getMedia(id: string): Promise<MediaRow | null>;
+  listMedia(q: { query?: string; missingAlt?: boolean; limit: number; offset: number }): Promise<{ items: MediaRow[]; total: number }>;
+  updateMedia(id: string, patch: Partial<Pick<MediaRow, "alt" | "meta">>): Promise<MediaRow | null>;
+  deleteMedia(id: string): Promise<boolean>;
+
   createToken(row: TokenRow): Promise<void>;
   /** An active token: not revoked and not expired at `nowIso`. */
   findToken(hash: string, nowIso: string): Promise<{ id: string; agent: string; kind: TokenKind } | null>;
@@ -124,6 +145,40 @@ export interface Store {
   revokeTokens(agent: string, at: string): Promise<number>;
   /** Agent tokens and Studio sessions, newest first (login codes are left out). */
   listTokens(): Promise<(Omit<TokenRow, "hash"> & { revokedAt: string | null })[]>;
+}
+
+export interface TextDoc {
+  id: string;
+  model: string;
+  locale: string;
+  title: string;
+  body: string;
+  /** term → weighted frequency; title terms count more. */
+  terms: Record<string, number>;
+}
+
+export interface TextHit {
+  id: string;
+  model: string;
+  locale: string;
+  title: string;
+  body: string;
+  score: number;
+  matched: number;
+}
+
+export interface MediaRow {
+  id: string;
+  url: string;
+  filename: string;
+  mime: string;
+  size: number;
+  width?: number;
+  height?: number;
+  alt?: string;
+  meta?: Record<string, unknown>;
+  createdAt: string;
+  createdBy: string;
 }
 
 /** `agent`: an API token. `session`: a Studio sign-in. `login`: a one-time code that starts a session. */

@@ -1,5 +1,7 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { isAbsolute, resolve } from "node:path";
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { resolveConfig, type Config, type ResolvedConfig } from "../config.ts";
 import { indexedFields, isModel, toJsonSchema, type Model } from "../schema/model.ts";
 import { SqliteStore } from "../store/sqlite.ts";
@@ -9,7 +11,7 @@ import { newId, rejectChangeset } from "./changesets.ts";
 import { coreActions } from "./core-actions.ts";
 import { AicmsError } from "./errors.ts";
 import { modelActions } from "./model-actions.ts";
-import { loadModules, moduleContext, type ModuleDef } from "./modules.ts";
+import { checkModules, compileRoute, moduleActions, moduleContext, type ModuleDef, type ModuleRoute } from "./modules.ts";
 import { OWNER, type Actor } from "./policy.ts";
 
 export interface ToolInfo {
@@ -50,8 +52,21 @@ export interface Kernel {
   readonly store: Store;
   readonly models: Map<string, Model>;
   readonly actions: Map<string, RegisteredAction>;
+  /** Installed modules, in load order. */
   readonly modules: ModuleDef[];
   readonly defaultLocale: string;
+  /** The project's aicms.config file, when the kernel was started from one (lets installs persist). */
+  readonly configFile?: string;
+  /** The project folder: where aicms.config.ts lives, or the working directory. */
+  readonly projectDir: string;
+  /** A folder a module may keep files in (created on first use). */
+  moduleDir(name: string): string;
+  /** The implementation of a capability, if an installed module provides it. */
+  service<T = unknown>(capability: string): T | undefined;
+  /** The module route matching a request, if any. */
+  matchRoute(method: string, path: string): { route: ModuleRoute; params: Record<string, string> } | null;
+  /** Load a module into the running kernel: models, Actions, hooks, routes, services, then its setup. */
+  installModule(mod: ModuleDef): Promise<void>;
   /** Run an Action through the full pipeline: visibility, budget, validation, run, event log. */
   call<T = any>(name: string, input: unknown, opts: { actor: Actor; gate: Gate }): Promise<T>;
   /** Actions this actor can see, as tool descriptions. */
@@ -79,6 +94,10 @@ export interface CreateOptions {
   cwd?: string;
   /** Bring your own store (tests, other databases). */
   store?: Store;
+  /** Where modules keep files (media uploads, exports). Defaults to the database's folder. */
+  dataDir?: string;
+  /** The config file the kernel came from, so module installs can be written back. */
+  configFile?: string;
 }
 
 export async function createCMS(input: Config, opts: CreateOptions = {}): Promise<Kernel> {
@@ -86,6 +105,10 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
   const cwd = opts.cwd ?? process.cwd();
   const dbPath = config.db.path === ":memory:" || isAbsolute(config.db.path) ? config.db.path : resolve(cwd, config.db.path);
   const store = opts.store ?? new SqliteStore(dbPath);
+  const dataDir = opts.dataDir ?? (dbPath === ":memory:" ? join(tmpdir(), `aicms-${process.pid}`) : dirname(dbPath));
+  const modules: ModuleDef[] = [];
+  const services = new Map<string, unknown>();
+  const routes: ModuleRoute[] = [];
 
   const models = new Map<string, Model>();
   const actions = new Map<string, RegisteredAction>();
@@ -131,8 +154,42 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
     store,
     models,
     actions,
-    modules: config.modules,
+    modules,
     defaultLocale: config.locales[0],
+    configFile: opts.configFile,
+    projectDir: cwd,
+
+    moduleDir(name) {
+      const dir = join(dataDir, "modules", name);
+      mkdirSync(dir, { recursive: true });
+      return dir;
+    },
+
+    service: <T,>(capability: string) => services.get(capability) as T | undefined,
+
+    matchRoute(method, path) {
+      for (const route of routes) {
+        if (route.method !== method && !(method === "HEAD" && route.method === "GET")) continue;
+        const m = route.regex.exec(path);
+        if (m) return { route, params: Object.fromEntries(route.keys.map((key, i) => [key, decodeURIComponent(m[i + 1])])) };
+      }
+      return null;
+    },
+
+    async installModule(mod) {
+      checkModules([...modules, mod]);
+      const added: Model[] = [];
+      for (const m of mod.models ?? []) {
+        addModel(m, `module "${mod.name}"`);
+        added.push(m);
+      }
+      checkRefs();
+      for (const m of added) for (const a of modelActions(m)) addAction(a);
+      for (const a of moduleActions(mod)) addAction(a);
+      await store.init(added.map((m) => ({ model: m.name, fields: indexedFields(m) })));
+      await register(mod);
+      await kernel.emit("module.installed", { module: mod.name });
+    },
 
     async call(name, rawInput, { actor, gate }) {
       const started = Date.now();
@@ -279,28 +336,43 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
     close: () => store.close(),
   };
 
-  // ---- assemble the registry ----
-  for (const m of config.models) addModel(m, "config.models");
-  const fromModules = loadModules(kernel, config.modules);
-  for (const m of fromModules.models) addModel(m, "a module");
-  for (const m of models.values()) {
-    for (const [key, f] of Object.entries(m.fields)) {
-      if (f.kind === "ref" && !models.has(f.options.model as string)) {
-        throw new Error(`${m.name}.${key} references model "${f.options.model}", which doesn't exist`);
+  function checkRefs() {
+    for (const m of models.values()) {
+      for (const [key, f] of Object.entries(m.fields)) {
+        if (f.kind === "ref" && !models.has(f.options.model as string)) {
+          throw new Error(`${m.name}.${key} references model "${f.options.model}", which doesn't exist`);
+        }
       }
     }
   }
-  for (const a of coreActions()) addAction(a);
-  for (const m of models.values()) for (const a of modelActions(m)) addAction(a);
-  for (const a of fromModules.actions) addAction(a);
 
-  for (const mod of config.modules) {
+  /** Hooks, routes, services and setup: the parts of a module that live outside the registry. */
+  async function register(mod: ModuleDef) {
+    modules.push(mod);
     const system: Actor = { id: `module:${mod.name}`, kind: "system", scopes: ["*"], review: "auto" };
     for (const [event, handler] of Object.entries(mod.on ?? {})) {
       kernel.on(event, (ev, payload) => handler({ event: ev, payload, ctx: moduleContext(kernel, mod, system, "internal") }));
     }
+    for (const [key, handler] of Object.entries(mod.routes ?? {})) {
+      const route = compileRoute(mod.name, key, handler);
+      const clash = routes.find((r) => r.method === route.method && r.path === route.path);
+      if (clash) throw new Error(`Modules "${clash.module}" and "${mod.name}" both serve ${key}`);
+      routes.push(route);
+    }
+    for (const [cap, impl] of Object.entries(mod.services ?? {})) services.set(cap, impl);
+    await mod.setup?.(moduleContext(kernel, mod, system, "internal"));
   }
 
+  // ---- assemble the registry ----
+  checkModules(config.modules);
+  for (const m of config.models) addModel(m, "config.models");
+  for (const mod of config.modules) for (const m of mod.models ?? []) addModel(m, `module "${mod.name}"`);
+  checkRefs();
+  for (const a of coreActions()) addAction(a);
+  for (const m of models.values()) for (const a of modelActions(m)) addAction(a);
+  for (const mod of config.modules) for (const a of moduleActions(mod)) addAction(a);
+
   await store.init([...models.values()].map((m) => ({ model: m.name, fields: indexedFields(m) })));
+  for (const mod of config.modules) await register(mod);
   return kernel;
 }

@@ -9,6 +9,7 @@ import {
   entryHistory,
   entryVersion,
   mergeChangeset,
+  proposeModule,
   rejectChangeset,
   restoreEntry,
   revertChangeset,
@@ -16,6 +17,10 @@ import {
   summarize,
 } from "./changesets.ts";
 import { AicmsError } from "./errors.ts";
+import { catalog } from "../modules/catalog.ts";
+import type { SearchService } from "../modules/search.ts";
+import { installFromCatalog } from "./install.ts";
+import { moduleManifest } from "./modules.ts";
 import { allows, modelPermissions, type Actor } from "./policy.ts";
 import type { Kernel } from "./cms.ts";
 
@@ -23,6 +28,7 @@ const signedIn = (a: Actor) => a.kind !== "public";
 const reviewer = (a: Actor) => allows(a.scopes, "changesets:review");
 const manager = (a: Actor) => allows(a.scopes, "agents:manage");
 const auditor = (a: Actor) => allows(a.scopes, "events:read");
+const installer = (a: Actor) => allows(a.scopes, "modules:install");
 
 /** A field as clients need it to render a form or write valid input. */
 export function describeField(name: string, f: AnyField, writable?: boolean): Record<string, unknown> {
@@ -131,6 +137,12 @@ export function coreActions(): RegisteredAction[] {
         }),
       async run(input: { query: string; model?: string; limit?: number }, { actor, kernel: k }) {
         const models = [...k.models.values()].filter((m) => modelPermissions(actor, m).read && (!input.model || m.name === input.model));
+        // A module that provides "search" (e.g. the official search module) answers with ranked results.
+        const provider = k.service<SearchService>("search");
+        if (provider) {
+          const hits = await provider.query({ query: input.query, models: models.map((m) => m.name), limit: input.limit ?? 10 });
+          return { query: input.query, ranked: true, hits };
+        }
         const rows = await k.store.scan(models.map((m) => m.name), 5000);
         const q = input.query.toLocaleLowerCase();
         const hits = [];
@@ -208,7 +220,13 @@ export function coreActions(): RegisteredAction[] {
       description: "For reviewers: publish a changeset. Checks run again first; if something changed meanwhile, the changeset goes back to its author.",
       visible: reviewer,
       schema: () => z.strictObject({ id: z.string().min(1) }),
-      run: (input: { id: string }, { actor, kernel }) => mergeChangeset(kernel, input.id, actor.id),
+      async run(input: { id: string }, { actor, kernel }) {
+        const cs = await kernel.store.getChangeset(input.id);
+        if (cs?.items.some((i) => i.op === "install") && !installer(actor)) {
+          throw new AicmsError("forbidden", "Installing a module needs the modules:install scope (the site owner has it)");
+        }
+        return mergeChangeset(kernel, input.id, actor.id);
+      },
     },
     {
       name: "cms.reject",
@@ -323,6 +341,35 @@ export function coreActions(): RegisteredAction[] {
       async run(input: { actor?: string; limit?: number; before?: number }, { kernel }) {
         return { events: await kernel.store.listEvents({ actor: input.actor, limit: input.limit ?? 50, before: input.before }) };
       },
+    },
+    {
+      name: "cms.modules",
+      description: "Installed modules and what each may do (models, Actions, scopes, routes, hooks), plus official modules that can be installed. Propose one with cms_propose_module.",
+      readOnly: true,
+      visible: signedIn,
+      schema: () => z.strictObject({}),
+      async run(_input: Record<string, never>, { actor, kernel: k }) {
+        const installed = new Set(k.modules.map((m) => m.name));
+        return {
+          installed: k.modules.map(moduleManifest),
+          available: catalog.filter((c) => !installed.has(c.name)).map((c) => ({ ...moduleManifest(c.create()), title: c.title, summary: c.summary })),
+          youCan: installer(actor) ? "install" : "propose",
+        };
+      },
+    },
+    {
+      name: "cms.propose_module",
+      description: "Ask the site owner to install an official module (see cms_modules). The proposal waits in their Inbox with the module's permissions; you can't install code yourself.",
+      visible: signedIn,
+      schema: () => z.strictObject({ module: z.string().min(1), reason: z.string().min(10).max(2000).describe("Why the site needs it, for the person who decides") }),
+      run: (input: { module: string; reason: string }, { actor, kernel }) => proposeModule(kernel, actor, input.module, input.reason),
+    },
+    {
+      name: "cms.install_module",
+      description: "For admins: install an official module now. It is loaded into the running server and written to aicms.config.",
+      visible: installer,
+      schema: () => z.strictObject({ module: z.string().min(1) }),
+      run: (input: { module: string }, { kernel }) => installFromCatalog(kernel, input.module),
     },
   ];
 }

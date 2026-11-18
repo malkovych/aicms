@@ -49,6 +49,11 @@ const PATHS: Record<string, string> = {
   search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4",
   alert: "M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
   arrow: "M5 12h14M13 6l6 6-6 6",
+  modules: "M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM7 11V7.5h4V11M13 11V7.5h4V11",
+  media: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9.5h.01",
+  upload: "M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3",
+  link: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1",
+  file: "M7 3h7l5 5v13H7zM14 3v5h5",
 };
 
 export function Icon({ name, size = 18 }: { name: keyof typeof PATHS | string; size?: number }) {

@@ -8,10 +8,10 @@ import { isModel } from "./schema/model.ts";
 
 const CONFIG_FILES = ["aicms.config.ts", "aicms.config.mts", "aicms.config.js", "aicms.config.mjs"];
 
-/** Our own entry file, so projects without a local `aicms` install still resolve `import ... from "aicms"`. */
-function selfEntry(): string {
-  const js = fileURLToPath(new URL("./index.js", import.meta.url));
-  return existsSync(js) ? js : fileURLToPath(new URL("./index.ts", import.meta.url));
+/** Our own entry files, so projects without a local `aicms` install still resolve `import ... from "aicms"`. */
+function selfEntry(rel = "./index"): string {
+  const js = fileURLToPath(new URL(`${rel}.js`, import.meta.url));
+  return existsSync(js) ? js : fileURLToPath(new URL(`${rel}.ts`, import.meta.url));
 }
 
 function resolvesLocally(root: string): boolean {
@@ -21,6 +21,17 @@ function resolvesLocally(root: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Import a module file or package the way aicms.config would see it. */
+export async function importFrom(root: string, specifier: string): Promise<unknown> {
+  const jiti = createJiti(join(root, "aicms.config.ts"), {
+    interopDefault: true,
+    moduleCache: false,
+    fsCache: false,
+    ...(resolvesLocally(root) ? {} : { alias: { "aicms/modules": selfEntry("./modules/index"), aicms: selfEntry() } }),
+  });
+  return jiti.import(specifier, { default: true });
 }
 
 export interface Project {
@@ -38,7 +49,8 @@ export async function loadProject(cwd: string, explicit?: string): Promise<Proje
     interopDefault: true,
     moduleCache: false,
     fsCache: false,
-    ...(resolvesLocally(root) ? {} : { alias: { aicms: selfEntry() } }),
+    // The more specific alias first: "aicms/modules" must not become "<index file>/modules".
+    ...(resolvesLocally(root) ? {} : { alias: { "aicms/modules": selfEntry("./modules/index"), aicms: selfEntry() } }),
   });
   let config = (await jiti.import(file, { default: true })) as Config;
   if (!config || typeof config !== "object") throw new Error(`${file} must export a config: export default defineConfig({ ... })`);

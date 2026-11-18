@@ -2,7 +2,7 @@ import { typeLabel } from "../schema/fields.ts";
 import type { Kernel } from "../kernel/cms.ts";
 import { modelPermissions, type Actor } from "../kernel/policy.ts";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
 /** /llms.txt: a plain description of the site for any agent, no token needed. */
 export function llmsTxt(k: Kernel, actor: Actor, origin: string): string {
@@ -14,7 +14,7 @@ export function llmsTxt(k: Kernel, actor: Actor, origin: string): string {
     "## Connect",
     `- MCP (Streamable HTTP): ${origin}/mcp, header \`Authorization: Bearer <token>\``,
     `- REST: ${origin}/api/v1 · OpenAPI: ${origin}/openapi.json`,
-    `- Live events (SSE): ${origin}/api/v1/events`,
+    `- Live events (SSE): ${origin}/api/v1/events · GraphQL: ${origin}/graphql`,
     "- Tokens are issued by the site owner: `aicms agent create <name>`",
     "- Start with the `cms_describe` tool; it lists models, guides and your permissions.",
     "",
@@ -50,6 +50,7 @@ export function manifest(k: Kernel, origin: string) {
       openapi: `${origin}/openapi.json`,
       llms: `${origin}/llms.txt`,
       events: `${origin}/api/v1/events`,
+      graphql: `${origin}/graphql`,
       studio: `${origin}/studio/`,
     },
     auth: { type: "bearer", issuedBy: "site owner via `aicms agent create <name>`" },

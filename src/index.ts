@@ -7,7 +7,7 @@ export { field, type Field, type InferFields, type MediaValue } from "./schema/f
 export { slugify } from "./schema/slug.ts";
 export { markdownToBlocks, blocksToMarkdown, type Block } from "./schema/markdown.ts";
 export { action, type ActionDef, type Gate } from "./kernel/action.ts";
-export { defineModule, type ModuleDef, type ModuleContext, type EventHandler } from "./kernel/modules.ts";
+export { defineModule, moduleManifest, type ModuleDef, type ModuleContext, type ModuleManifest, type ModuleStorage, type EventHandler, type RouteHandler } from "./kernel/modules.ts";
 export { createCMS, type Kernel, type ToolInfo, type CreateOptions, type FeedEvent, type Feed } from "./kernel/cms.ts";
 export { AicmsError, type ErrorCode } from "./kernel/errors.ts";
 export { allows, type Actor, type ReviewMode, type Budget } from "./kernel/policy.ts";

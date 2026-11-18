@@ -163,4 +163,38 @@ export function titleField(m: ModelInfo | undefined): string | undefined {
   return (textual.find((f) => f.required) ?? textual[0])?.name;
 }
 
+// ---------- modules ----------
+
+export interface ModuleManifest {
+  name: string;
+  title?: string;
+  summary?: string;
+  description?: string;
+  version?: string;
+  provides: string[];
+  requires: string[];
+  uses: string[];
+  models: { name: string; fields: string[] }[];
+  actions: { name: string; description: string; scope: string; readOnly?: boolean; destructive?: boolean }[];
+  scopes: string[];
+  routes: string[];
+  hooks: string[];
+}
+
+interface ModulesInfo {
+  installed: ModuleManifest[];
+  available: ModuleManifest[];
+  youCan: "install" | "propose";
+}
+
+const ModulesContext = createContext<{ modules?: ModulesInfo; has(name: string): boolean; reload(): void }>({ has: () => false, reload() {} });
+
+export function ModulesProvider({ children }: { children: ReactNode }) {
+  const data = useApi(() => cms.call<ModulesInfo>("cms.modules"), []);
+  const has = useCallback((name: string) => !!data.data?.installed.some((m) => m.name === name), [data.data]);
+  return <ModulesContext.Provider value={{ modules: data.data, has, reload: data.reload }}>{children}</ModulesContext.Provider>;
+}
+
+export const useModules = () => useContext(ModulesContext);
+
 export const humanize = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
