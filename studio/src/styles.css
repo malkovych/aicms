@@ -196,7 +196,7 @@ a.change-title:hover { color: var(--core); }
 .field-change:first-child { border-top: 0; }
 .field-name { color: var(--muted); font-size: 13px; font-weight: 600; padding-top: 2px; overflow-wrap: anywhere; }
 @container (max-width: 560px) {
-  .field-change { grid-template-columns: 1fr; gap: 6px; }
+  .field-change { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 }
 .subfields { display: flex; flex-direction: column; gap: 10px; }
 .subfield { display: flex; flex-direction: column; gap: 2px; }
@@ -304,10 +304,10 @@ select.input { cursor: pointer; }
 .prose aside::before { content: attr(data-block); display: block; font: 700 11px var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--mod-ink); margin-bottom: 4px; }
 .media-input { display: flex; gap: 12px; align-items: flex-start; }
 .media-thumb { width: 92px; height: 70px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--plate-2); }
-.media-fields { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.media-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 
 /* ---------- agents ---------- */
-.agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 16px; }
 .agent { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
 .agent-head { display: flex; gap: 12px; align-items: flex-start; }
 .agent-head h2 { font: 700 17px/1.25 var(--f-display); }
@@ -317,7 +317,7 @@ select.input { cursor: pointer; }
 .stats dt { font-size: 12px; color: var(--muted); }
 .stats dd { margin: 2px 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stats a { color: var(--human-ink); }
-.agent footer { flex-wrap: nowrap; justify-content: space-between; margin-top: auto; }
+.agent footer { justify-content: space-between; margin-top: auto; }
 .agent footer .btn { padding: 0 12px; }
 .meter { height: 6px; border-radius: 99px; background: var(--plate-2); overflow: hidden; }
 .meter span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--human), var(--mod)); }
@@ -411,25 +411,28 @@ select.input { cursor: pointer; }
 .tr-list li { display: flex; align-items: center; gap: 10px; min-height: 36px; min-width: 0; }
 .tr-link { font-weight: 600; font-size: 14px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tr-link:hover { color: var(--core); }
+.tr-waiting { font-weight: 500; color: var(--mod-ink); white-space: normal; }
 @media (max-width: 600px) {
+  .media-input { flex-direction: column; }
+  .media-thumb { width: 100%; height: auto; aspect-ratio: 16 / 9; }
   .manifest-rows > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .media-actions { position: static; justify-content: flex-end; }
 }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
-  .split { grid-template-columns: 1fr; }
+  .split { grid-template-columns: minmax(0, 1fr); }
   .split.has-detail .split-list { display: none; }
   .split:not(.has-detail) .split-detail { display: none; }
   .split-detail { position: static; }
   .back-btn { display: inline-grid; }
 }
 @media (max-width: 1080px) {
-  .editor { grid-template-columns: 1fr; }
+  .editor { grid-template-columns: minmax(0, 1fr); }
   .editor-side { position: static; }
 }
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .sidebar { position: sticky; top: 0; z-index: 20; height: auto; flex-direction: row; align-items: center; gap: 8px; padding: 10px 16px; border-right: 0; border-bottom: 1px solid var(--line-soft); overflow-x: auto; }
   .brand { padding: 0 6px 0 0; }
   .site-name, .nav-sub, .live-text, .wordmark-text { display: none; }
@@ -449,7 +452,7 @@ select.input { cursor: pointer; }
   .log-row .pill { display: none; }
   .log-action { grid-column: 1; }
   .log-status { grid-column: 2; }
-  .agent-grid { grid-template-columns: 1fr; }
+  .agent-grid { grid-template-columns: minmax(0, 1fr); }
   .decide { margin: 0 -16px -16px; padding: 14px 16px; }
   .detail { padding: 16px; }
 }

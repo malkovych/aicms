@@ -44,7 +44,7 @@ export function i18n(opts: I18nOptions = {}) {
     const e = await source(ctx, id);
     const g = (await groupOf(ctx, id))?.members ?? { [e.locale]: id };
     const model = ctx.models().find((m) => m.name === e.model)!;
-    const out: Record<string, { id: string; title: string; published: boolean } | null> = {};
+    const out: Record<string, { id: string; title: string; published: boolean; waiting?: { changeset: string; actor: string } } | null> = {};
     for (const locale of ctx.site.locales) {
       const member = g[locale];
       if (!member) {
@@ -52,7 +52,13 @@ export function i18n(opts: I18nOptions = {}) {
         continue;
       }
       const t = await ctx.entry(member);
-      out[locale] = t ? { id: member, title: displayTitle(model, t.data), published: t.version > 0 } : null;
+      if (t && t.version > 0) {
+        out[locale] = { id: member, title: displayTitle(model, t.data), published: true };
+        continue;
+      }
+      // Not published: someone's draft (maybe waiting for review), or a draft that was dropped.
+      const p = await ctx.pending(member);
+      out[locale] = p ? { id: member, title: displayTitle(model, p.data), published: false, waiting: { changeset: p.changeset, actor: p.actor } } : null;
     }
     return { id, model: e.model, locale: e.locale, translations: out, missing: Object.entries(out).filter(([, v]) => !v).map(([l]) => l) };
   }
@@ -104,7 +110,9 @@ export function i18n(opts: I18nOptions = {}) {
           if (!ctx.site.locales.includes(input.locale)) throw new AicmsError("invalid", `Unknown locale "${input.locale}". Site locales: ${ctx.site.locales.join(", ")}`);
           if (input.locale === e.locale) throw new AicmsError("invalid", `${input.id} is already in ${e.locale}`);
           const existing = (await groupOf(ctx, input.id))?.members[input.locale];
-          if (existing && (await ctx.entry(existing))) throw new AicmsError("conflict", `${input.id} already has a ${input.locale} translation: ${existing}. Draft changes to it instead.`);
+          if (existing && (await ctx.entry(existing))?.version) throw new AicmsError("conflict", `${input.id} already has a ${input.locale} translation: ${existing}. Draft changes to it instead.`);
+          const waiting = existing ? await ctx.pending(existing) : null;
+          if (waiting) throw new AicmsError("conflict", `A ${input.locale} translation of ${input.id} is already drafted by ${waiting.actor} (${waiting.changeset}, ${waiting.status === "submitted" ? "waiting for review" : "not submitted yet"})`);
           const model = ctx.models().find((m) => m.name === e.model)!;
           const unknown = Object.keys(input.fields ?? {}).filter((k) => !(k in model.fields));
           if (unknown.length) throw new AicmsError("invalid", `Model "${model.name}" has no field ${unknown.join(", ")}`);

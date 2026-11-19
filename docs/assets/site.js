@@ -10,7 +10,7 @@
       hint: "Try Reviews: it requires commerce, and commerce requires payments.",
       nav: ["Content", "Media", "Inbox", "Agents", "Modules"],
       navMod: { forms: "Forms", commerce: "Shop", reviews: "Reviews" },
-      shipping: "Nova Poshta", payments: { label: "Stripe" }
+      shipping: "DHL", payments: { label: "Stripe" }
     },
     uk: {
       requires: "потребує ", gives: "дає ",
@@ -53,10 +53,10 @@
   if (!wrap) return;
   var BASE_TOOLS = ["cms_describe", "cms_search", "cms_submit", "cms_changes", "post_list", "post_get", "post_draft", "post_delete"];
   var MODS = {
-    seo: { label: "SEO", provides: "seo", tools: ["seo_audit", "seo_suggest_meta"] },
-    i18n: { label: "i18n", provides: "i18n", tools: ["i18n_translate", "i18n_status"] },
-    media: { label: "Media", provides: "media", tools: ["media_upload", "media_alt_text", "media_generate"] },
-    search: { label: "Search", provides: "search", tools: ["search_semantic", "search_similar"] },
+    seo: { label: "SEO", provides: "seo", tools: ["seo_audit", "seo_report"] },
+    i18n: { label: "i18n", provides: "i18n", tools: ["i18n_translate", "i18n_missing"] },
+    media: { label: "Media", provides: "media", tools: ["media_upload", "media_list", "media_update"] },
+    search: { label: "Search", provides: "search", tools: ["search_reindex"] },
     forms: { label: "Forms", provides: "forms", tools: ["form_submissions", "form_export"], nav: "forms" },
     commerce: { label: "Commerce", provides: "commerce", requires: ["payments"], tools: ["product_draft", "order_list", "order_status"], nav: "commerce" },
     payments: { label: T.payments.label, provides: "payments", tools: ["payments_status", "payments_refund"] },

@@ -129,3 +129,42 @@ test("astro: Content Layer loader with rendered blocks", async () => {
   assert.match(logs[0], /Loaded 3 post entries/);
   await k.close();
 });
+
+test("sveltekit: SvelteKit fetch, dependencies, one cache header, live invalidation", async () => {
+  const { createAicms, liveUpdates, dependsFor } = await import("../packages/sveltekit/src/index.ts");
+  const k = await makeCms();
+  const app = createApp(k, { studio: false });
+  const deps: string[] = [];
+  const headers: Record<string, string>[] = [];
+  let fetches = 0;
+  const event = {
+    fetch: ((input: RequestInfo | URL, init?: RequestInit) => (fetches++, app.request(String(input), init))) as typeof fetch,
+    depends: (...d: string[]) => void deps.push(...d),
+    setHeaders: (h: Record<string, string>) => {
+      if (headers.length) throw new Error("set twice");
+      headers.push(h);
+    },
+  };
+  const cms = createAicms({ url: "http://localhost", maxAge: 60 })(event);
+  await cms.post.list();
+  await cms.tag.list();
+  assert.equal(fetches, 2, "requests go through the load event's fetch");
+  assert.deepEqual([...new Set(deps)], ["aicms:all", "aicms:post", "aicms:tag"]);
+  assert.deepEqual(headers, [{ "cache-control": "public, max-age=0, s-maxage=60, stale-while-revalidate=600" }]);
+  assert.deepEqual(dependsFor("cms.describe"), ["aicms:all"]);
+
+  const invalidated: string[] = [];
+  let listener: ((m: { data: string }) => void) | undefined;
+  let closed = false;
+  class FakeES {
+    constructor(url: string) { assert.equal(url, "http://cms.test/api/v1/events"); }
+    addEventListener(_: string, fn: (m: { data: string }) => void) { listener = fn; }
+    close() { closed = true; }
+  }
+  const stop = liveUpdates({ url: "http://cms.test/", invalidate: (d) => void invalidated.push(d), models: ["post"], EventSource: FakeES as unknown as typeof EventSource });
+  listener!({ data: JSON.stringify({ event: "changeset.merged", payload: { entries: [{ model: "post" }, { model: "tag" }, { model: "post" }] } }) });
+  assert.deepEqual(invalidated, ["aicms:post"]);
+  stop();
+  assert.equal(closed, true);
+  await k.close();
+});

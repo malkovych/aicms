@@ -61,6 +61,9 @@ const en = {
   "tr.create": "Create the {locale} version",
   "tr.created": "Created the {locale} version: now translate it",
   "tr.this": "this entry",
+  "tr.waiting": "drafted by {who}, waiting for review",
+  "media.allAlt": "Every image has alt text.",
+  "media.noMatch": "No files match.",
 
   "op.install": "Module",
   "inbox.installApprove": "Install the module",
@@ -250,6 +253,9 @@ const uk: Record<Key, string> = {
   "tr.create": "Створити версію {locale}",
   "tr.created": "Створено версію {locale}: тепер переклади її",
   "tr.this": "цей запис",
+  "tr.waiting": "чернетка від {who}, чекає рев'ю",
+  "media.allAlt": "У всіх зображень є alt-текст.",
+  "media.noMatch": "Нічого не знайдено.",
 
   "op.install": "Модуль",
   "inbox.installApprove": "Встановити модуль",

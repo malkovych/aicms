@@ -3,7 +3,7 @@
 > A CMS where AI agents are first-class users and people are the editors and owners.
 > Describe a model once and get REST, MCP tools, an admin and types.
 
-Status: v0.2 · phase 1 works: Studio with Inbox, rollback, live events, TypeScript and Python SDKs, Next.js and Astro adapters, on top of the phase 0 kernel · [Українською](ARCHITECTURE.uk.md)
+Status: v0.3 · phase 2 works: module SDK, `aicms add`, official modules (seo, search, media, i18n, git-sync), module proposals in Inbox, GraphQL, Nuxt and SvelteKit, on top of phases 0 and 1 · [Українською](ARCHITECTURE.uk.md)
 
 ---
 
@@ -212,24 +212,58 @@ export default defineModule({
 
 Inside `run`, `ctx` writes through the caller's changeset, so a module Action can never bypass review. Its reads include the caller's own drafts, so a module can check work before it is submitted.
 
+A module may also have:
+
+| Part | What it does | Example |
+|---|---|---|
+| options | modules are usually factories: `seo({ siteUrl })` | `aicms.config.ts` |
+| `setup(ctx)` | runs once at start or install | build an index |
+| `services` | the implementation of a capability in `provides` | `search` answers `cms.search` |
+| `routes` | HTTP routes, `"GET /sitemap.xml"`, with `:params` | `/media/:id/:name` |
+| `ctx.kv` | small JSON values that belong to the module | translation groups |
+| `ctx.pending(id)` | someone's unpublished draft of an entry | "already waiting for review" |
+
+Everything a module asks for is listed in its manifest (`cms_modules`, `aicms modules`, Studio): models it adds and uses, Actions with their scopes, routes and hooks. Modules can be installed into a running server; their tools, routes and GraphQL types appear at once.
+
+```bash
+aicms add seo                 # an official module
+aicms add ./modules/reviews   # a local folder
+aicms add @someone/aicms-x    # an npm package (npm install + config)
+aicms module new reviews      # scaffold modules/reviews/module.ts
+aicms remove seo              # its data stays in the database
+```
+
+`aicms add` writes the import and the entry in `modules`, pulls in official modules that provide what the new one requires, checks that the project still starts, and puts the file back if it doesn't.
+
 ### 6.2 Capabilities instead of package dependencies
 
 A module asks for a capability, not a package:
 
 | `requires` | Who can provide it |
 |---|---|
-| `payments` | `stripe`, `paddle`, `liqpay`, `monobank` |
-| `shipping` | `dhl`, `ups`, `nova-poshta` |
+| `payments` | `stripe`, `paddle`, `adyen` |
+| `shipping` | `dhl`, `ups`, `fedex` |
 | `search` | `search-sqlite`, `search-pg`, `meilisearch` |
 | `ai.image` | `openai-images`, `flux`, `local-sd` |
 
 So modules can be swapped without rewriting the rest.
 
-### 6.3 Official modules (first wave)
-`seo` · `i18n` · `media` (AI alt text, cropping, AVIF/WebP) · `search` (full-text + vector) · `git-sync` · `forms` · `commerce` · `reviews` · `redirects` · `analytics` · `workflows` (multi-step agent processes).
+### 6.3 Official modules
+
+Shipped in phase 2 (`import { seo, search, media, i18n, gitSync } from "aicms/modules"`):
+
+| Module | What it gives agents and people |
+|---|---|
+| `seo` | `seo_audit`: a 0–100 score with concrete fixes (title and description length, slug, word count, heading order, image alt text, internal links), working on drafts; `seo_report` for a whole model; `sitemap.xml` and `robots.txt` |
+| `search` | ranked full-text search in any language (TF-IDF, title boost, prefix matching) on a portable index; `cms_search` uses it as soon as it is installed |
+| `media` | a media library: uploads, imports from URLs (private networks blocked), image sizes, alt text an agent can fill in, inert SVG, files under `/media` |
+| `i18n` | translation groups across locales, what's missing per locale, `i18n_translate` drafts a translation that goes through review |
+| `git-sync` | published content mirrored to Markdown with frontmatter; edited files come back as a changeset (`aicms sync import`), so pull requests can feed the Inbox |
+
+Next: `forms` · `commerce` · `reviews` · `redirects` · `analytics` · `workflows` (multi-step agent processes), vector search and AI image tools.
 
 ### 6.4 Agents proposing modules
-An agent may propose installing a module. The proposal arrives in Inbox as a changeset of a special kind, listing the scopes and models the module asks for. A person installs it; agents never install code themselves. (Phase 2.)
+An agent may propose installing a module. The proposal arrives in Inbox as a changeset of a special kind, listing the scopes and models the module asks for. A person with the `modules:install` scope installs it from the Inbox (`cms_propose_module`, then Approve); agents never install code themselves. A declined proposal is closed, not reopened.
 
 ## 7. Connecting agents
 
@@ -243,7 +277,7 @@ An agent may propose installing a module. The proposal arrives in Inbox as a cha
 | **Webhooks** | frontends, automations | `webhooks` in config | 0 |
 | **SDK** | your own agents | `@aicms/client` (TS), `aicms` (PyPI) | 1 |
 | **SSE events** | agents that react to changes | `/api/v1/events` | 1 |
-| **GraphQL** | frontends with complex queries | `/graphql` | 2 |
+| **GraphQL** | frontends with complex queries; references resolve to entries | `/graphql` | 2 ✓ |
 | **A2A** | agent-to-agent | `/.well-known/agent.json` | 3 |
 
 ### 7.2 Tools an agent sees
@@ -263,6 +297,7 @@ An agent only sees what its scopes allow. MCP tool names use underscores (`post_
 | `cms_review` / `cms_merge` / `cms_reject` | `cms.review` … | for reviewers with `changesets:review` |
 | `cms_history` / `cms_restore` / `cms_revert` | `cms.history` … | an entry's versions; draft the restore of any version, or the undo of a merged changeset |
 | `cms_discard` | `cms.discard` | drop drafts that weren't submitted |
+| `cms_modules` / `cms_propose_module` | `cms.modules` … | installed modules with their permissions, official ones to propose; `cms_install_module` for admins (`modules:install`) |
 | `cms_agents` / `cms_token` / `cms_revoke` / `cms_log` | `cms.agents` … | for admins (`agents:manage`, `events:read`): agents, tokens, the action log |
 | `<module>_<action>` | `<module>.<action>` | module Actions |
 
@@ -295,7 +330,9 @@ Shipped in phase 1:
 - **Activity.** The action log of people and agents, live over SSE.
 - English and Ukrainian, light and dark themes, phone-sized screens.
 
-Next: **Media** and **Modules** sections, **⌘K** (commands and plain language: “find posts without a cover” → `post.list` with a filter), **presence** (who is editing an entry right now, Yjs), a block editor beside the frontend's live preview, and roles for people other than the owner.
+Added in phase 2: **Media** (a library with drag-and-drop upload and alt text), **Modules** (manifests and one-click install), module proposals in **Inbox**, a media picker in forms, and SEO and translation panels beside each entry.
+
+Next: **⌘K** (commands and plain language: “find posts without a cover” → `post.list` with a filter), **presence** (who is editing an entry right now, Yjs), a block editor beside the frontend's live preview, and roles for people other than the owner.
 
 ## 9. Frameworks
 
@@ -305,8 +342,8 @@ Next: **Media** and **Modules** sections, **⌘K** (commands and plain language:
 | `@aicms/next` | reads cached with per-model tags, `revalidateTag` from webhooks, `<Blocks />` for Server Components | phase 1 ✓ (Draft Mode preview next) |
 | `@aicms/astro` | Content Layer loader with pre-rendered blocks | phase 1 ✓ |
 | `aicms` (PyPI) | Python client, standard library only | phase 1 ✓ |
-| `@aicms/nuxt` | composables, Nitro revalidation, preview | phase 2 |
-| `@aicms/sveltekit` | load helpers, preview | phase 2 |
+| `@aicms/nuxt` | a Nuxt module: `useAicms`, `useAicmsData`, a signed webhook that clears Nitro's page cache | phase 2 ✓ |
+| `@aicms/sveltekit` | load helpers on SvelteKit's `fetch` with `depends`, cache headers, live `invalidate` on publish | phase 2 ✓ |
 | `@aicms/react-router` | loaders for React Router 7 / Remix | later |
 | `@aicms/angular` | services and resolvers | later |
 | `@aicms/expo` | mobile client with an offline cache | later |
@@ -366,7 +403,7 @@ Deployment modes:
 |---|---|---|
 | **0. Kernel** ✓ | Schema Engine, Action Bus, policies, changesets, event log, SQLite store, REST, MCP, discovery, webhooks, CLI | an agent drafts content over MCP, a person merges it |
 | **1. Human in the loop** ✓ | Studio MVP and Inbox, rollback, SSE events, TypeScript and Python SDKs, Next.js and Astro adapters | the first real site |
-| **2. Lego** | module SDK, `aicms add`, official modules (seo, i18n, media, search, git-sync), agents propose modules via Inbox, GraphQL, Nuxt and SvelteKit | the ecosystem starts growing |
+| **2. Lego** ✓ | module SDK, `aicms add`, official modules (seo, i18n, media, search, git-sync), agents propose modules via Inbox, GraphQL, Nuxt and SvelteKit | the ecosystem starts growing |
 | **3. Scale** | Postgres and edge, real-time presence, module registry, A2A, commerce | production for shops and media |
 
 ## 13. Decisions

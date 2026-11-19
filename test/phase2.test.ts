@@ -196,6 +196,9 @@ test("i18n: translate, find what's missing, unlink on delete", async () => {
   assert.equal(t.translationOf, en.id);
   const before: any = await k.call("i18n.translations", { id: en.id }, translator);
   assert.equal(before.translations.uk.published, false);
+  const ownerView: any = await k.call("i18n.translations", { id: en.id }, owner);
+  assert.equal(ownerView.translations.uk.waiting.actor, "translator", "others see the draft as waiting, not missing");
+  await assert.rejects(k.call("i18n.translate", { id: en.id, locale: "uk" }, owner), /already drafted by translator/);
   const sub: any = await k.call("cms.submit", {}, translator);
   assert.equal(sub.status, "submitted", "translations are reviewed like any draft");
   await k.call("cms.merge", { id: sub.changeset }, owner);

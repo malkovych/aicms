@@ -378,7 +378,8 @@ img{max-width:100%}
 .cta a.pri{background:var(--core);border-color:var(--core);color:var(--on-core)}
 .cta a:hover{transform:translateY(-1px)}
 .status{display:inline-flex;align-items:center;gap:8px;margin-top:22px;font-size:13px;color:var(--muted)}
-.status i{width:8px;height:8px;border-radius:50%;background:var(--mod)}
+.status i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--mod)}
+.status code{font-size:12px}
 @media (max-width:640px){.top .links{display:none}.gh span{display:none}}
 @media (prefers-reduced-motion:reduce){.cta a:hover{transform:none}}
 /* nav overflow: keep right alignment but stay scrollable from the first link */

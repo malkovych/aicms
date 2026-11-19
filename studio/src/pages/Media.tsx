@@ -131,7 +131,7 @@ export function Media() {
       </div>
 
       {data.error ? <ErrorBox error={data.error} onRetry={data.reload} /> : !data.data ? <Skeleton rows={4} /> : !data.data.items.length ? (
-        <Empty icon="media">{t("media.empty")}</Empty>
+        <Empty icon={filter === "alt" ? "check" : "media"}>{query.trim() ? t("media.noMatch") : filter === "alt" ? t("media.allAlt") : t("media.empty")}</Empty>
       ) : (
         <>
           <motion.ul className="media-grid" variants={list} initial="initial" animate="enter">

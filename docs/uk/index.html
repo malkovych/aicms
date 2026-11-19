@@ -47,7 +47,7 @@
   <!-- ================= HERO ================= -->
   <div class="wrap hero">
     <div>
-      <div class="eyebrow">Відкритий код · MIT · v0.2 · листопад 2026</div>
+      <div class="eyebrow">Відкритий код · MIT · v0.3 · листопад 2026</div>
       <h1 class="wordmark"><span class="ai">AI</span>CMS</h1>
       <p class="lead">CMS, у якій AI-агенти працюють з контентом так само природно, як люди.</p>
       <p class="body">Опиши модель один раз. AICMS сам згенерує API, MCP-інструменти для агентів, адмінку для людей і типи для фронтенду. Модулі додаються як цеглинки, а кожна зміна агента проходить перевірку і відкочується одним кліком.</p>
@@ -67,7 +67,7 @@
         <a class="pri" href="https://github.com/malkovych/aicms">Відкрити на GitHub</a>
         <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.uk.md">Читати специфікацію</a>
       </div>
-      <div class="status"><i></i>Фаза 1 працює: Studio з «Вхідними», відкат, події наживо, SDK для TypeScript і Python, Next.js і Astro.</div>
+      <div class="status"><i></i><span>Фаза 2 працює: модулі додаються через <code>aicms add</code>; seo, search, media, i18n, git-sync; GraphQL; Nuxt і SvelteKit.</span></div>
     </div>
 
     <div class="demo" aria-label="Одна модель генерує всі інтерфейси">
@@ -488,7 +488,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
         <div class="plate gate"><h3>MCP</h3><span class="ep">/mcp · npx aicms mcp</span><p>Claude, Cursor, ChatGPT і будь-який MCP-клієнт. Streamable HTTP або stdio.</p></div>
         <div class="plate gate"><h3>REST</h3><span class="ep">/api/v1/*</span><p>Звичайні HTTP-запити з токеном агента. n8n, Make, скрипти.</p></div>
         <div class="plate gate"><h3>OpenAPI</h3><span class="ep">/openapi.json</span><p>Function calling у будь-якій LLM, LangChain, LlamaIndex.</p></div>
-        <div class="plate gate"><h3>GraphQL</h3><span class="ep">/graphql</span><p>Складні вибірки для фронтендів і аналітичних агентів.</p></div>
+        <div class="plate gate"><h3>GraphQL</h3><span class="ep">/graphql</span><p>Генерується з моделей; посилання розгортаються в записи, права ті самі.</p></div>
         <div class="plate gate"><h3>SDK</h3><span class="ep">@aicms/client · pip install aicms</span><p>Власні агенти на TypeScript і Python з типами зі схем.</p></div>
         <div class="plate gate"><h3>Events</h3><span class="ep">webhooks · /events (SSE)</span><p>Агент реагує на зміни: новий відгук, нове замовлення, публікація.</p></div>
         <div class="plate gate"><h3>A2A</h3><span class="ep">/.well-known/agent.json</span><p>Картка агента для протоколу агент-до-агента.</p></div>
@@ -673,8 +673,8 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
       </div>
       <div class="fw">
         <div class="plate fwc"><h3>Next.js <span class="ready">готово</span></h3><code>@aicms/next</code><p>Server Components, revalidateTag, &lt;Blocks /&gt;</p></div>
-        <div class="plate fwc"><h3>Nuxt</h3><code>@aicms/nuxt</code><p>composables, ревалідація через Nitro</p></div>
-        <div class="plate fwc"><h3>SvelteKit</h3><code>@aicms/sveltekit</code><p>load-хелпери, preview</p></div>
+        <div class="plate fwc"><h3>Nuxt <span class="ready">готово</span></h3><code>@aicms/nuxt</code><p>useAicmsData, кеш Nitro чиститься вебхуком</p></div>
+        <div class="plate fwc"><h3>SvelteKit <span class="ready">готово</span></h3><code>@aicms/sveltekit</code><p>load-хелпери, invalidate наживо після публікації</p></div>
         <div class="plate fwc"><h3>Astro <span class="ready">готово</span></h3><code>@aicms/astro</code><p>Content Layer loader, SSG і SSR</p></div>
         <div class="plate fwc"><h3>React Router</h3><code>@aicms/react-router</code><p>loaders для v7 і Remix</p></div>
         <div class="plate fwc"><h3>Angular</h3><code>@aicms/angular</code><p>сервіси й резолвери</p></div>
@@ -744,7 +744,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
       <div class="road">
         <div class="plate ph"><span class="n">Фаза 0 · готово</span><h3>Ядро</h3><ul><li>Schema Engine</li><li>Action Bus і політики</li><li>Changesets і журнал подій</li><li>SQLite-сховище</li><li>REST і MCP</li><li>CLI</li></ul><p class="res">Агент пише чернетки через MCP, людина їх мерджить</p></div>
         <div class="plate ph"><span class="n">Фаза 1 · готово</span><h3>Людина в контурі</h3><ul><li>Studio: «Вхідні», контент, агенти, журнал</li><li>Відкат: відновити версію, скасувати changeset</li><li>Події наживо через SSE</li><li>SDK для TypeScript і Python</li><li>Адаптери Next.js і Astro</li></ul><p class="res">Перший реальний сайт</p></div>
-        <div class="plate ph"><span class="n">Фаза 2</span><h3>Lego</h3><ul><li>SDK модулів, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>Модуль git-sync</li><li>Агенти пропонують модулі через «Вхідні»</li><li>Nuxt, SvelteKit</li></ul><p class="res">Екосистема модулів починає рости</p></div>
+        <div class="plate ph"><span class="n">Фаза 2 · готово</span><h3>Lego</h3><ul><li>SDK модулів, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>Модуль git-sync</li><li>Агенти пропонують модулі через «Вхідні»</li><li>Nuxt, SvelteKit</li></ul><p class="res">Екосистема модулів починає рости</p></div>
         <div class="plate ph"><span class="n">Фаза 3</span><h3>Масштаб</h3><ul><li>Postgres і edge</li><li>Спільне редагування</li><li>Реєстр модулів, A2A</li><li>commerce</li></ul><p class="res">Продакшн для магазинів і медіа</p></div>
       </div>
       <div class="duo">

@@ -4,7 +4,7 @@
 
 [Сайт](https://malkovych.github.io/aicms/uk/) · [Архітектура](ARCHITECTURE.uk.md) · [English](README.md)
 
-> Статус: фаза 1 працює. Поверх ядра (схеми, Action Bus, changesets, SQLite, REST, MCP, CLI) тепер є Studio з «Вхідними» для рев'ю змін від агентів, відкат, події наживо, SDK для TypeScript і Python та адаптери для Next.js і Astro. Далі модулі й екосистема.
+> Статус: фаза 2 працює. Модулі тепер додаються як цеглинки: `aicms add seo` і офіційні модулі seo, search, media, i18n та git-sync, агенти пропонують модулі через «Вхідні», є GraphQL і адаптери для Next.js, Nuxt, SvelteKit та Astro. Усе це поверх ядра й Studio з фаз 0 і 1. Далі масштаб: Postgres, edge, реєстр модулів.
 
 ## Навіщо
 
@@ -45,6 +45,19 @@ node ../../dist/cli.js reject <changeset-id> --comment "Коротший заг�
 node ../../dist/cli.js revert <changeset-id>        # скасувати вже опубліковане
 ```
 
+## Модулі
+
+```bash
+aicms add seo          # оцінка записів, sitemap.xml і robots.txt
+aicms add search       # пошук будь-якою мовою з ранжуванням
+aicms add media        # медіатека із завантаженням, розмірами зображень і alt-текстом
+aicms add i18n         # переклади між мовами
+aicms add git-sync     # контент як Markdown-файли; правки повертаються на рев'ю
+aicms modules          # що встановлено і що кожному модулю дозволено
+```
+
+Модуль — один файл: що він дає й потребує, його моделі, Actions, хуки й маршрути. `aicms module new reviews` створює заготовку. Перед встановленням видно права модуля; агент може запропонувати модуль (`cms_propose_module`), а встановлює людина з «Вхідних».
+
 ## Studio
 
 Studio — адмінка для людей за адресою `/studio/`:
@@ -52,6 +65,7 @@ Studio — адмінка для людей за адресою `/studio/`:
 - **Вхідні:** changesets від агентів із diff до слова. Схвалити, попросити правки (коментар іде агенту) або закрити. Опублікований changeset скасовується одним кліком.
 - **Контент:** форми, згенеровані з моделей, Markdown-редактор із переглядом, історія кожного запису й відновлення версії одним кліком.
 - **Агенти:** scopes, режим рев'ю, використання бюджету, незавершена робота; видача й відкликання токенів.
+- **Медіа** і **Модулі:** медіатека, маніфести модулів і встановлення одним кліком; панелі SEO й перекладів біля кожного запису.
 - **Журнал:** кожна дія людей і агентів наживо.
 
 Англійська й українська, світла й темна теми, працює на телефоні.
@@ -80,6 +94,8 @@ cms.submit(note="Перший пост")
 |---|---|
 | [`@aicms/client`](packages/client) | Типізований клієнт, події наживо й безпечний `blocksToHtml`, без залежностей |
 | [`@aicms/next`](packages/next) | Читання з кешем і тегами на модель, ревалідація з вебхуків, `<Blocks />` |
+| [`@aicms/nuxt`](packages/nuxt) | Nuxt-модуль: `useAicms`, `useAicmsData`, вебхук, що чистить кеш сторінок Nitro |
+| [`@aicms/sveltekit`](packages/sveltekit) | Load-хелпери з `depends`, заголовки кешу, оновлення наживо після публікації |
 | [`@aicms/astro`](packages/astro) | Content Layer loader з готовим HTML блоків |
 | [`aicms` (Python)](sdk/python) | Клієнт для Python лише на стандартній бібліотеці |
 
@@ -88,10 +104,11 @@ cms.submit(note="Перший пост")
 | Частина | Де |
 |---|---|
 | Поля, моделі, Markdown ↔ блоки, slugs | `src/schema/` |
-| Action Bus, політики, changesets, відкат, модулі, стрічка подій | `src/kernel/` |
+| Action Bus, політики, changesets, відкат, SDK модулів і встановлення, стрічка подій | `src/kernel/` |
+| Офіційні модулі: seo, search, media, i18n, git-sync | `src/modules/` |
 | Сховище SQLite: entries, versions, changesets, events, media, tokens | `src/store/` |
-| REST, OpenAPI, discovery, MCP, SSE, роздача Studio | `src/gates/` |
-| CLI і `aicms types` | `src/cli.ts`, `src/typegen.ts` |
+| REST, OpenAPI, GraphQL, discovery, MCP, SSE, маршрути модулів, Studio | `src/gates/` |
+| CLI, `aicms types`, правки конфігу для `aicms add` | `src/cli.ts`, `src/typegen.ts`, `src/config-edit.ts` |
 | Studio (React + Framer Motion, готова збірка лежить у `dist/studio`) | `studio/` |
 | TypeScript-клієнт і адаптери фреймворків | `packages/` |
 | Клієнт для Python | `sdk/python/` |

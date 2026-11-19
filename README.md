@@ -4,7 +4,7 @@
 
 [Website](https://malkovych.github.io/aicms/) · [Architecture](ARCHITECTURE.md) · [Українською](README.uk.md)
 
-> Status: phase 1 works. On top of the kernel (schemas, Action Bus, changesets, SQLite, REST, MCP, CLI) there is now Studio with an Inbox for reviewing agents' changes, rollback, live events, TypeScript and Python SDKs, and adapters for Next.js and Astro. Modules and the ecosystem come next.
+> Status: phase 2 works. Modules now snap in like bricks: `aicms add seo` and the official seo, search, media, i18n and git-sync modules, agents proposing modules through the Inbox, a GraphQL gate, and adapters for Next.js, Nuxt, SvelteKit and Astro. On top of the kernel and Studio from phases 0 and 1. Scale (Postgres, edge, a module registry) comes next.
 
 ## Why
 
@@ -79,6 +79,19 @@ node ../../dist/cli.js reject <changeset-id> --comment "Shorter title, please"
 node ../../dist/cli.js revert <changeset-id>        # undo something already published
 ```
 
+## Modules
+
+```bash
+aicms add seo          # scores entries, sitemap.xml and robots.txt
+aicms add search       # ranked full-text search in any language
+aicms add media        # media library with uploads, image sizes and alt text
+aicms add i18n         # translations across locales
+aicms add git-sync     # content as Markdown files; edits come back for review
+aicms modules          # what is installed and what each module may do
+```
+
+A module is one file: what it provides and requires, its models, Actions, hooks and routes. `aicms module new reviews` scaffolds one. Before anything is installed you see its permissions; an agent can propose a module (`cms_propose_module`), and a person installs it from the Inbox.
+
 ## Studio
 
 Studio is the admin for people, served at `/studio/`:
@@ -86,6 +99,7 @@ Studio is the admin for people, served at `/studio/`:
 - **Inbox:** agents' changesets with a word-level diff. Approve, request changes (the comment goes back to the agent) or close. Undo a published changeset in one click.
 - **Content:** forms generated from your models, a Markdown editor with preview, and every entry's history with one-click restore.
 - **Agents:** scopes, review mode, budget use and pending work; issue or revoke tokens.
+- **Media** and **Modules:** the media library, module manifests and one-click install; SEO and translation panels beside each entry.
 - **Activity:** every action by people and agents, live.
 
 English and Ukrainian, light and dark themes, works on a phone.
@@ -114,6 +128,8 @@ cms.submit(note="First post")
 |---|---|
 | [`@aicms/client`](packages/client) | Typed client, live events and safe `blocksToHtml`, no dependencies |
 | [`@aicms/next`](packages/next) | Reads cached with per-model tags, revalidation from webhooks, `<Blocks />` |
+| [`@aicms/nuxt`](packages/nuxt) | Nuxt module: `useAicms`, `useAicmsData`, a webhook that clears Nitro's page cache |
+| [`@aicms/sveltekit`](packages/sveltekit) | Load helpers with `depends`, cache headers, live updates on publish |
 | [`@aicms/astro`](packages/astro) | Content Layer loader with pre-rendered blocks |
 | [`aicms` (Python)](sdk/python) | Python client, standard library only |
 
@@ -122,10 +138,11 @@ cms.submit(note="First post")
 | Piece | Where |
 |---|---|
 | Field builders, models, Markdown ↔ blocks, slugs | `src/schema/` |
-| Action Bus, policies, changesets, rollback, modules, live feed | `src/kernel/` |
+| Action Bus, policies, changesets, rollback, module SDK and installs, live feed | `src/kernel/` |
+| Official modules: seo, search, media, i18n, git-sync | `src/modules/` |
 | SQLite store: entries, versions, changesets, events, media, tokens | `src/store/` |
-| REST, OpenAPI, discovery, MCP, SSE, Studio serving | `src/gates/` |
-| CLI and `aicms types` | `src/cli.ts`, `src/typegen.ts` |
+| REST, OpenAPI, GraphQL, discovery, MCP, SSE, module routes, Studio | `src/gates/` |
+| CLI, `aicms types`, config edits for `aicms add` | `src/cli.ts`, `src/typegen.ts`, `src/config-edit.ts` |
 | Studio (React + Framer Motion, shipped prebuilt in `dist/studio`) | `studio/` |
 | TypeScript client and framework adapters | `packages/` |
 | Python client | `sdk/python/` |

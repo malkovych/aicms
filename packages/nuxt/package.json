@@ -1,0 +1,40 @@
+{
+  "name": "@aicms/nuxt",
+  "version": "0.3.0",
+  "description": "AICMS for Nuxt: a module with an auto-imported client, typed data fetching and cache invalidation from webhooks.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/malkovych/aicms.git",
+    "directory": "packages/nuxt"
+  },
+  "homepage": "https://malkovych.github.io/aicms/",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aicms/client": "^0.3.0",
+    "@nuxt/kit": "^4.6.4"
+  },
+  "peerDependencies": {
+    "nuxt": ">=3.15"
+  },
+  "peerDependenciesMeta": {
+    "nuxt": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@nuxt/schema": "^4.6.4"
+  }
+}

@@ -1,9 +1,13 @@
 {
   "name": "@aicms/astro",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AICMS for Astro: a Content Layer loader with rendered blocks.",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/malkovych/aicms.git", "directory": "packages/astro" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/malkovych/aicms.git",
+    "directory": "packages/astro"
+  },
   "homepage": "https://malkovych.github.io/aicms/",
   "type": "module",
   "sideEffects": false,
@@ -14,9 +18,22 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "src"],
-  "scripts": { "build": "tsc -b" },
-  "dependencies": { "@aicms/client": "^0.2.0" },
-  "peerDependencies": { "astro": ">=5" },
-  "peerDependenciesMeta": { "astro": { "optional": true } }
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aicms/client": "^0.3.0"
+  },
+  "peerDependencies": {
+    "astro": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "astro": {
+      "optional": true
+    }
+  }
 }

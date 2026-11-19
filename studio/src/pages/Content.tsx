@@ -626,7 +626,7 @@ function SeoPanel({ model, id, version }: { model: string; id: string; version?:
 
 interface Translations {
   locale: string;
-  translations: Record<string, { id: string; title: string; published: boolean } | null>;
+  translations: Record<string, { id: string; title: string; published: boolean; waiting?: { changeset: string; actor: string } } | null>;
   missing: string[];
 }
 
@@ -664,7 +664,9 @@ function TranslationsPanel({ model, id, version }: { model: string; id: string; 
             <li key={locale}>
               <Pill tone={e ? "core" : "adapt"}>{locale}</Pill>
               {e ? (
-                e.id === id ? <span className="muted small">{t("tr.this")}</span> : <Link to={`/content/${model}/${e.id}`} className="tr-link">{e.title || e.id}</Link>
+                e.id === id ? <span className="muted small">{t("tr.this")}</span>
+                : e.waiting ? <Link to={`/inbox/${e.waiting.changeset}`} className="tr-link tr-waiting" title={e.title}>{t("tr.waiting", { who: e.waiting.actor })}</Link>
+                : <Link to={`/content/${model}/${e.id}`} className="tr-link">{e.title || e.id}</Link>
               ) : (
                 <Button tone="quiet" icon="plus" busy={busy === locale} onClick={() => create(locale)}>{t("tr.create", { locale })}</Button>
               )}

@@ -1,6 +1,6 @@
 {
   "name": "aicms",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "CMS for AI agents: one schema generates REST, MCP tools, admin and types",
   "license": "MIT",
   "repository": {
@@ -30,8 +30,8 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -b packages/client packages/next packages/astro && npm run build -w @aicms/studio",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -b packages/client packages/next packages/astro && tsc -p studio --noEmit",
+    "build": "tsc -p tsconfig.json && tsc -b packages/client packages/next packages/astro packages/sveltekit packages/nuxt && npm run build -w @aicms/studio",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -b packages/client packages/next packages/astro packages/sveltekit packages/nuxt && tsc -p studio --noEmit",
     "test": "node --conditions=source --experimental-strip-types --disable-warning=ExperimentalWarning --test --test-timeout=30000 'test/*.test.ts'",
     "test:python": "cd sdk/python && python3 -m unittest discover -s tests -v",
     "studio": "npm run dev -w @aicms/studio",
@@ -54,6 +54,8 @@
     "packages/client",
     "packages/next",
     "packages/astro",
+    "packages/sveltekit",
+    "packages/nuxt",
     "studio"
   ]
 }
