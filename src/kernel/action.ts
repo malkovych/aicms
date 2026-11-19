@@ -4,7 +4,7 @@ import type { Actor } from "./policy.ts";
 import type { Kernel } from "./cms.ts";
 import type { ModuleContext } from "./modules.ts";
 
-export type Gate = "mcp" | "rest" | "graphql" | "cli" | "sdk" | "studio" | "internal";
+export type Gate = "mcp" | "rest" | "graphql" | "a2a" | "cli" | "sdk" | "studio" | "internal";
 
 export interface CallContext {
   actor: Actor;

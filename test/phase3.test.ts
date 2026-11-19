@@ -81,3 +81,48 @@ test("registry: valid, in sync with the official modules, searchable, permission
   await assert.rejects(k.call("cms.propose_module", { module: "reviews", reason: "We sell things and want reviews" }, { actor: k.actor("writer"), gate: "mcp" }), /No module "reviews" in the catalog/, "the server never installs community code");
   await k.close();
 });
+
+test("A2A: Agent Card per caller, message/send runs a skill, tasks/get, honest errors", async () => {
+  const { createApp } = await import("../src/index.ts");
+  const k = await makeCms();
+  const app = createApp(k, { studio: false });
+  const writer = await k.createToken("writer");
+  const rpc = (method: string, params: unknown, token?: string, id: number | string = 1) =>
+    app.request("/a2a", { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) }).then((r) => r.json() as Promise<any>);
+  const msg = (data: unknown) => ({ message: { kind: "message", role: "user", messageId: "m1", parts: [{ kind: "data", data }] } });
+
+  const card: any = await (await app.request("/.well-known/agent-card.json")).json();
+  assert.equal(card.protocolVersion, "0.3.0");
+  assert.equal(card.url, "http://localhost/a2a");
+  assert.ok(card.skills.some((s: any) => s.id === "post.list"));
+  assert.equal(card.skills.some((s: any) => s.id === "post.draft" || s.id === "cms.token"), false, "anonymous callers see read skills only");
+  const writerCard: any = await (await app.request("/.well-known/agent-card.json", { headers: { authorization: `Bearer ${writer}` } })).json();
+  assert.ok(writerCard.skills.some((s: any) => s.id === "post.draft"));
+
+  const drafted = await rpc("message/send", msg({ action: "post.draft", input: { title: "From another agent" } }), writer);
+  assert.equal(drafted.result.kind, "task");
+  assert.equal(drafted.result.status.state, "completed");
+  assert.equal(drafted.result.artifacts[0].parts[0].data.op, "create");
+  const byTool = await rpc("message/send", msg({ skill: "cms_submit", input: { note: "via A2A" } }), writer);
+  assert.equal(byTool.result.artifacts[0].parts[0].data.status, "submitted");
+
+  const got = await rpc("tasks/get", { id: drafted.result.id }, writer);
+  assert.equal(got.result.id, drafted.result.id);
+  assert.equal((await rpc("tasks/get", { id: drafted.result.id })).error.code, -32001, "tasks belong to whoever created them");
+  assert.equal((await rpc("tasks/cancel", { id: drafted.result.id }, writer)).error.code, -32002);
+  assert.equal((await rpc("message/stream", msg({}), writer)).error.code, -32004);
+
+  const denied = await rpc("message/send", msg({ action: "post.draft", input: { title: "x" } }));
+  assert.equal(denied.result.status.state, "rejected");
+  assert.equal(denied.result.status.message.parts[1].data.error.code, "unauthorized");
+  const invalid = await rpc("message/send", msg({ action: "post.draft", input: { title: 42 } }), writer);
+  assert.equal(invalid.result.status.state, "failed");
+  const prose = await rpc("message/send", { message: { kind: "message", role: "user", messageId: "m2", parts: [{ kind: "text", text: "Write a post about winter" }] } }, writer);
+  assert.equal(prose.result.status.state, "input-required");
+  assert.match(prose.result.status.message.parts[0].text, /data part/);
+  assert.equal((await app.request("/a2a", { method: "POST", body: "{" }).then((r) => r.json() as Promise<any>)).error.code, -32700);
+
+  const log: any = await k.call("cms.log", { actor: "writer", limit: 1 }, owner);
+  assert.equal(log.events[0].gate, "a2a");
+  await k.close();
+});

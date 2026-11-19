@@ -8,6 +8,7 @@ import { filterableFields } from "../schema/model.ts";
 import { llmsTxt, manifest, VERSION } from "./discovery.ts";
 import { eventStream } from "./events.ts";
 import { buildSchema, runGraphQL } from "./graphql.ts";
+import { agentCard, createA2A } from "./a2a.ts";
 import { moduleContext } from "../kernel/modules.ts";
 import type { GraphQLSchema } from "graphql";
 import { handleMcpRequest } from "./mcp.ts";
@@ -110,6 +111,7 @@ export function createApp(k: Kernel, opts: AppOptions = {}): Hono<Env> {
       llms: `${origin(c)}/llms.txt`,
       events: `${origin(c)}/api/v1/events`,
       graphql: `${origin(c)}/graphql`,
+      a2a: `${origin(c)}/.well-known/agent-card.json`,
       studio: `${origin(c)}/studio/`,
     }),
   );
@@ -138,6 +140,20 @@ export function createApp(k: Kernel, opts: AppOptions = {}): Hono<Env> {
       throw new AicmsError("invalid", "variables must be JSON");
     }
     return gql(c, { query: q.query, variables, operationName: q.operationName }, true);
+  });
+
+  // ---- A2A: Agent Card + JSON-RPC ----
+  const a2a = createA2A(k);
+  app.get("/.well-known/agent-card.json", (c) => c.json(agentCard(k, origin(c), c.get("actor"))));
+  app.get("/.well-known/agent.json", (c) => c.json(agentCard(k, origin(c), c.get("actor"))));
+  app.post("/a2a", async (c) => {
+    let req: unknown;
+    try {
+      req = JSON.parse(await c.req.text());
+    } catch {
+      return c.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
+    }
+    return c.json(await a2a(c.get("actor"), req));
   });
 
   // ---- MCP ----
