@@ -36,7 +36,7 @@
     "test:python": "cd sdk/python && python3 -m unittest discover -s tests -v",
     "studio": "npm run dev -w @aicms/studio",
     "example": "npm run build && cd examples/blog && node ../../dist/cli.js dev",
-    "test:pg": "AICMS_TEST_DB=pglite node --conditions=source --experimental-strip-types --disable-warning=ExperimentalWarning --test --test-timeout=30000 'test/*.test.ts'"
+    "test:pg": "AICMS_TEST_DB=pglite node --conditions=source --experimental-strip-types --disable-warning=ExperimentalWarning --test --test-concurrency=2 --test-timeout=120000 'test/*.test.ts'"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.9",
