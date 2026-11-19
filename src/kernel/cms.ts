@@ -1,11 +1,11 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { builtin } from "../node.ts";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { resolveConfig, type Config, type ResolvedConfig } from "../config.ts";
 import { indexedFields, isModel, toJsonSchema, type Model } from "../schema/model.ts";
-import { SqliteStore } from "../store/sqlite.ts";
 import { openPostgres } from "../store/postgres.ts";
+import { SqlStore } from "../store/sql.ts";
+import { d1Driver, type D1DatabaseLike } from "../store/d1.ts";
 import type { Store } from "../store/types.ts";
 import { toolName, type Gate, type RegisteredAction } from "./action.ts";
 import { newId, rejectChangeset } from "./changesets.ts";
@@ -80,6 +80,8 @@ export interface Kernel {
   readonly projectDir: string;
   /** A folder a module may keep files in (created on first use). */
   moduleDir(name: string): string;
+  /** A platform binding (Cloudflare env), e.g. an R2 bucket. */
+  binding<T = unknown>(name: string): T;
   /** The implementation of a capability, if an installed module provides it. */
   service<T = unknown>(capability: string): T | undefined;
   /** The module route matching a request, if any. */
@@ -108,6 +110,14 @@ export interface Kernel {
 }
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
+/** Constant-time comparison of two tokens. */
+function sameToken(a: string, b: string) {
+  const x = hashToken(a);
+  const y = hashToken(b);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return diff === 0;
+}
 
 export interface CreateOptions {
   /** Base directory for relative paths such as the SQLite file. */
@@ -118,15 +128,32 @@ export interface CreateOptions {
   dataDir?: string;
   /** The config file the kernel came from, so module installs can be written back. */
   configFile?: string;
+  /** A token that acts as the owner (e.g. from AICMS_OWNER_TOKEN). Useful where there is no CLI, such as the edge. */
+  ownerToken?: string;
+  /** Platform bindings (Cloudflare env): D1 databases, R2 buckets. */
+  bindings?: Record<string, unknown>;
+  /** Keep background work (webhooks) alive after the response, e.g. a Worker's ctx.waitUntil. */
+  waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 export async function createCMS(input: Config, opts: CreateOptions = {}): Promise<Kernel> {
   const config = resolveConfig(input);
-  const cwd = opts.cwd ?? process.cwd();
+  const cwd = opts.cwd ?? (typeof process !== "undefined" && process.cwd ? process.cwd() : "/");
   const db = config.db;
   const dbPath = db.kind === "sqlite" ? (db.path === ":memory:" || isAbsolute(db.path) ? db.path : resolve(cwd, db.path)) : null;
-  const store = opts.store ?? (db.kind === "postgres" ? await openPostgres(db) : new SqliteStore(dbPath!));
-  const dataDir = opts.dataDir ?? (dbPath && dbPath !== ":memory:" ? dirname(dbPath) : db.kind === "postgres" ? resolve(cwd, ".aicms") : join(tmpdir(), `aicms-${process.pid}`));
+  const binding = (name: string) => {
+    const b = opts.bindings?.[name];
+    if (!b) throw new Error(`No binding "${name}". Add it to wrangler config and pass env as bindings.`);
+    return b;
+  };
+  const store =
+    opts.store ??
+    (db.kind === "postgres"
+      ? await openPostgres(db)
+      : db.kind === "d1"
+        ? new SqlStore(d1Driver(binding(db.binding) as D1DatabaseLike))
+        : new (await import("../store/sqlite.ts")).SqliteStore(dbPath!));
+  const dataDir = opts.dataDir ?? (dbPath && dbPath !== ":memory:" ? dirname(dbPath) : db.kind === "sqlite" ? join(builtin("node:os")?.tmpdir() ?? "/tmp", `aicms-${process.pid}`) : resolve(cwd, ".aicms"));
   const modules: ModuleDef[] = [];
   const services = new Map<string, unknown>();
   const routes: ModuleRoute[] = [];
@@ -221,11 +248,14 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
 
     moduleDir(name) {
       const dir = join(dataDir, "modules", name);
-      mkdirSync(dir, { recursive: true });
+      const fs = builtin("node:fs");
+      if (!fs) throw new Error(`Module "${name}" needs a file system, which this platform doesn't have`);
+      fs.mkdirSync(dir, { recursive: true });
       return dir;
     },
 
     service: <T,>(capability: string) => services.get(capability) as T | undefined,
+    binding: <T,>(name: string) => binding(name) as T,
 
     matchRoute(method, path) {
       for (const route of routes) {
@@ -318,6 +348,7 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
 
     async resolveToken(token) {
       if (!token) return kernel.actor("public");
+      if (opts.ownerToken && opts.ownerToken.length >= 24 && sameToken(token, opts.ownerToken)) return OWNER;
       const row = await store.findToken(hashToken(token), new Date().toISOString());
       if (!row) throw new AicmsError("unauthorized", "Invalid, expired or revoked token");
       if (row.kind === "login") throw new AicmsError("unauthorized", "This is a one-time Studio sign-in code; open the sign-in link instead");
@@ -387,9 +418,10 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
         const body = JSON.stringify({ event, payload, at: new Date().toISOString() });
         const headers: Record<string, string> = { "content-type": "application/json", "x-aicms-event": event };
         if (hook.secret) headers["x-aicms-signature"] = `sha256=${createHmac("sha256", hook.secret).update(body).digest("hex")}`;
-        fetch(hook.url, { method: "POST", headers, body, signal: AbortSignal.timeout(5000) }).catch((e) =>
+        const sent = fetch(hook.url, { method: "POST", headers, body, signal: AbortSignal.timeout(5000) }).catch((e) =>
           console.warn(`[aicms] webhook ${hook.url} failed: ${e.message}`),
         );
+        opts.waitUntil?.(sent);
       }
     },
 

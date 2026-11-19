@@ -90,6 +90,8 @@ export interface ModuleContext {
   pending(id: string): Promise<{ changeset: string; actor: string; status: string; op: string; data: Record<string, unknown> } | null>;
   /** The implementation of a capability another module provides. */
   service<T = unknown>(capability: string): T | undefined;
+  /** A platform binding (Cloudflare env), e.g. an R2 bucket. */
+  binding<T = unknown>(name: string): T;
   kv: ModuleStorage;
   /** Low-level storage for search and media providers. */
   text: {
@@ -169,6 +171,7 @@ export function moduleContext(k: Kernel, mod: ModuleDef, actor: Actor, gate: Gat
       return null;
     },
     service: (cap) => k.service(cap),
+    binding: (name) => k.binding(name),
     kv: {
       get: (key) => s.kvGet(mod.name, key) as Promise<any>,
       set: (key, value) => s.kvSet(mod.name, key, value),

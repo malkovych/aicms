@@ -13,13 +13,13 @@ import { moduleContext } from "../kernel/modules.ts";
 import type { GraphQLSchema } from "graphql";
 import { handleMcpRequest } from "./mcp.ts";
 import { openapi } from "./openapi.ts";
-import { findStudio, mountStudio, SESSION_COOKIE } from "./studio.ts";
+import { dirSource, findStudio, mountStudio, SESSION_COOKIE, type StudioSource } from "./studio.ts";
 
 type Env = { Variables: { actor: Actor; gate: Gate } };
 
 export interface AppOptions {
-  /** Directory of the built Studio, or false to leave Studio out. Found automatically by default. */
-  studio?: string | false;
+  /** The built Studio: a directory, a source (e.g. Workers Assets), or false to leave it out. Found automatically by default. */
+  studio?: string | StudioSource | false;
 }
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -246,7 +246,10 @@ export function createApp(k: Kernel, opts: AppOptions = {}): Hono<Env> {
     return c.json(await call(c, `${m.name}.delete`, { id: c.req.param("id") }));
   });
 
-  if (opts.studio !== false) mountStudio(app, k, opts.studio ?? findStudio());
+  if (opts.studio !== false) {
+    const dir = typeof opts.studio === "string" ? opts.studio : opts.studio ? null : findStudio();
+    mountStudio(app, k, typeof opts.studio === "object" ? opts.studio : dir ? dirSource(dir) : null);
+  }
 
   // ---- module routes (sitemap.xml, /media/…), matched at request time so installs take effect at once ----
   app.all("*", async (c, next) => {

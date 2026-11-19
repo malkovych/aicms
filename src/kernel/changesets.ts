@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Model } from "../schema/model.ts";
 import { displayTitle, normalizePatch, projectData, storedSchema, uniqueFields } from "../schema/model.ts";
 import { slugify } from "../schema/slug.ts";
-import { applyPatch } from "../store/sqlite.ts";
+import { applyPatch } from "../store/sql.ts";
 import { ConflictError, type ChangesetItem, type ChangesetRow, type CheckIssue, type EntryRow } from "../store/types.ts";
 import { AicmsError } from "./errors.ts";
 import { findCatalog } from "../modules/catalog.ts";

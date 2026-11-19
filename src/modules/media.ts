@@ -1,9 +1,3 @@
-import { lookup } from "node:dns/promises";
-import { createReadStream } from "node:fs";
-import { isIP } from "node:net";
-import { mkdir, rm, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { Readable } from "node:stream";
 import { z } from "zod";
 import { action } from "../kernel/action.ts";
 import { newId } from "../kernel/changesets.ts";
@@ -13,7 +7,64 @@ import { allows } from "../kernel/policy.ts";
 import { slugify } from "../schema/slug.ts";
 import type { MediaRow } from "../store/types.ts";
 
+/** Where file bytes live. Metadata always stays in the database. */
+export interface MediaStorage {
+  put(key: string, bytes: Uint8Array, type: string): Promise<void>;
+  get(key: string): Promise<{ body: ReadableStream | Uint8Array; size?: number } | null>;
+  delete(key: string): Promise<void>;
+}
+
+/** Files on disk, under the module's data folder (servers). */
+export function localStorage(dir: () => string): MediaStorage {
+  const path = async (key: string) => (await import("node:path")).join(dir(), "files", key);
+  return {
+    async put(key, bytes) {
+      const fs = await import("node:fs/promises");
+      const file = await path(key);
+      await fs.mkdir((await import("node:path")).dirname(file), { recursive: true });
+      await fs.writeFile(file, bytes);
+    },
+    async get(key) {
+      const fs = await import("node:fs/promises");
+      try {
+        const file = await path(key);
+        const info = await fs.stat(file);
+        const { createReadStream } = await import("node:fs");
+        const { Readable } = await import("node:stream");
+        return { body: Readable.toWeb(createReadStream(file)) as ReadableStream, size: info.size };
+      } catch {
+        return null;
+      }
+    },
+    async delete(key) {
+      const fs = await import("node:fs/promises");
+      await fs.rm((await path(key)).replace(/[\\/][^\\/]+$/, ""), { recursive: true, force: true });
+    },
+  };
+}
+
+/** The parts of a Cloudflare R2 bucket binding the module uses. */
+interface R2BucketLike {
+  put(key: string, value: Uint8Array, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
+  get(key: string): Promise<{ body: ReadableStream; size: number } | null>;
+  delete(key: string): Promise<void>;
+}
+
+/** Files in a Cloudflare R2 bucket, by binding name (edge). */
+export function r2Storage(bucket: () => R2BucketLike): MediaStorage {
+  return {
+    put: async (key, bytes, type) => void (await bucket().put(key, bytes, { httpMetadata: { contentType: type } })),
+    get: async (key) => {
+      const obj = await bucket().get(key);
+      return obj ? { body: obj.body, size: obj.size } : null;
+    },
+    delete: (key) => bucket().delete(key),
+  };
+}
+
 export interface MediaOptions {
+  /** "local" (default: files next to the database) or { r2: "BINDING" } on Cloudflare. */
+  storage?: "local" | { r2: string };
   /** Largest accepted file, in bytes. Default 10 MB. */
   maxBytes?: number;
   /** Prefix for stored URLs, e.g. "https://cms.example.com". Default: relative ("/media/…"). */
@@ -23,6 +74,9 @@ export interface MediaOptions {
   /** Allow URL imports from private and loopback addresses (local development only). Default false. */
   allowPrivateNetworks?: boolean;
 }
+
+const isIPv4 = (s: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(s);
+const isIP = (s: string) => (isIPv4(s) ? 4 : s.includes(":") ? 6 : 0);
 
 /** Loopback, private, link-local and other non-public ranges (IPv4 and IPv6). */
 export function isPrivateAddress(ip: string): boolean {
@@ -94,7 +148,10 @@ function safeName(name: string | undefined, mime: string): string {
 export function media(opts: MediaOptions = {}) {
   const maxBytes = opts.maxBytes ?? 10 * 1024 * 1024;
   const base = (opts.baseUrl ?? "").replace(/\/+$/, "");
-  const fileOf = (ctx: ModuleContext, row: Pick<MediaRow, "id" | "filename">) => join(ctx.dataDir, "files", row.id, row.filename);
+  let storage: MediaStorage | undefined;
+  const files = (ctx: ModuleContext) =>
+    (storage ??= typeof opts.storage === "object" ? r2Storage(() => ctx.binding<R2BucketLike>((opts.storage as { r2: string }).r2)) : localStorage(() => ctx.dataDir));
+  const keyOf = (row: Pick<MediaRow, "id" | "filename">) => `${row.id}/${row.filename}`;
   const tooBig = () => new AicmsError("invalid", `Files may be up to ${Math.round(maxBytes / 1024 / 1024)} MB`);
 
   async function store(ctx: ModuleContext, buf: Buffer, name: string | undefined, alt: string | undefined): Promise<MediaRow> {
@@ -115,8 +172,7 @@ export function media(opts: MediaOptions = {}) {
       createdAt: new Date().toISOString(),
       createdBy: ctx.actor.id,
     };
-    await mkdir(join(ctx.dataDir, "files", id), { recursive: true });
-    await writeFile(fileOf(ctx, row), buf);
+    await files(ctx).put(keyOf(row), buf, mime);
     await ctx.media.create(row);
     return row;
   }
@@ -133,9 +189,17 @@ export function media(opts: MediaOptions = {}) {
     for (let hop = 0; hop < 4; hop++) {
       if (!/^https?:$/.test(u.protocol)) throw new AicmsError("invalid", "Only http(s) URLs can be imported");
       if (!opts.allowPrivateNetworks) {
-        const host = u.hostname.replace(/^\[|\]$/g, "");
-        const addresses = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((a) => a.address);
-        if (!addresses.length) throw new AicmsError("invalid", `Can't resolve ${u.hostname}`);
+        const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+        if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal")) throw new AicmsError("forbidden", `${u.hostname} points to a private network address`);
+        let addresses: string[] = isIP(host) ? [host] : [];
+        if (!addresses.length) {
+          // Servers resolve the name; the edge has no resolver but can't reach private networks anyway.
+          const dns = await import("node:dns/promises").catch(() => null);
+          if (dns?.lookup) {
+            addresses = (await dns.lookup(host, { all: true }).catch(() => [])).map((a) => a.address);
+            if (!addresses.length) throw new AicmsError("invalid", `Can't resolve ${u.hostname}`);
+          }
+        }
         if (addresses.some(isPrivateAddress)) throw new AicmsError("forbidden", `${u.hostname} points to a private network address`);
       }
       res = await fetch(u, { signal: AbortSignal.timeout(15_000), redirect: "manual" });
@@ -223,7 +287,7 @@ export function media(opts: MediaOptions = {}) {
           const row = await ctx.media.get(input.id);
           if (!row) throw new AicmsError("not_found", `No media ${input.id}`);
           await ctx.media.delete(input.id);
-          await rm(join(ctx.dataDir, "files", row.id), { recursive: true, force: true });
+          await files(ctx).delete(keyOf(row));
           return { deleted: input.id };
         },
       }),
@@ -248,12 +312,8 @@ export function media(opts: MediaOptions = {}) {
       "GET /media/:id/:name": async ({ params, ctx }) => {
         const row = await ctx.media.get(params.id);
         if (!row || row.filename !== params.name) return new Response("Not found", { status: 404 });
-        const path = fileOf(ctx, row);
-        try {
-          await stat(path);
-        } catch {
-          return new Response("Not found", { status: 404 });
-        }
+        const file = await files(ctx).get(keyOf(row));
+        if (!file) return new Response("Not found", { status: 404 });
         const headers: Record<string, string> = {
           "content-type": row.mime,
           "content-length": String(row.size),
@@ -262,7 +322,7 @@ export function media(opts: MediaOptions = {}) {
         };
         // An SVG can carry scripts: serve it inert.
         if (row.mime === "image/svg+xml") headers["content-security-policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
-        return new Response(Readable.toWeb(createReadStream(path)) as ReadableStream, { headers });
+        return new Response(file.body as ConstructorParameters<typeof Response>[0], { headers });
       },
     },
   });

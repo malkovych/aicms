@@ -3,7 +3,6 @@
 // listed by pull request to docs/registry.json. Each entry declares what the
 // module asks for, and `aicms add` refuses a package that asks for more.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
 import type { ModuleManifest } from "./kernel/modules.ts";
@@ -57,9 +56,10 @@ export function parseRegistry(data: unknown): Registry {
 export async function loadRegistry(url = DEFAULT_REGISTRY, opts: { cacheFile?: string; maxAgeMs?: number; fetch?: typeof fetch } = {}): Promise<Registry> {
   const maxAge = opts.maxAgeMs ?? 3_600_000;
   let cached: { at: number; url: string; data: unknown } | undefined;
-  if (opts.cacheFile) {
+  const fs = opts.cacheFile ? await import("node:fs/promises").catch(() => null) : null;
+  if (opts.cacheFile && fs) {
     try {
-      cached = JSON.parse(await readFile(opts.cacheFile, "utf8"));
+      cached = JSON.parse(await fs.readFile(opts.cacheFile, "utf8"));
     } catch {
       /* no cache yet */
     }
@@ -72,12 +72,13 @@ export async function loadRegistry(url = DEFAULT_REGISTRY, opts: { cacheFile?: s
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       data = await res.json();
     } else {
-      data = JSON.parse(await readFile(url.replace(/^file:\/\//, ""), "utf8"));
+      const files = await import("node:fs/promises");
+      data = JSON.parse(await files.readFile(url.replace(/^file:\/\//, ""), "utf8"));
     }
     const registry = parseRegistry(data);
-    if (opts.cacheFile) {
-      await mkdir(dirname(opts.cacheFile), { recursive: true });
-      await writeFile(opts.cacheFile, JSON.stringify({ at: Date.now(), url, data }));
+    if (opts.cacheFile && fs) {
+      await fs.mkdir(dirname(opts.cacheFile), { recursive: true }).catch(() => {});
+      await fs.writeFile(opts.cacheFile, JSON.stringify({ at: Date.now(), url, data })).catch(() => {});
     }
     return registry;
   } catch (e) {

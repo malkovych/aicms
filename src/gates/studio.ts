@@ -1,8 +1,6 @@
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Context, Hono } from "hono";
+import { builtin } from "../node.ts";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { Kernel } from "../kernel/cms.ts";
 
@@ -21,13 +19,49 @@ const TYPES: Record<string, string> = {
   ".txt": "text/plain; charset=utf-8",
 };
 
+/** Where Studio's files come from: a folder on a server, or Workers Assets on the edge. */
+export interface StudioSource {
+  /** A file by its path under /studio/ (e.g. "assets/index.js"), or null if there is none. */
+  read(rel: string): Promise<{ body: Uint8Array | ReadableStream; type?: string } | null>;
+}
+
 /** The built Studio: dist/studio next to the compiled kernel, or the repo's dist/ when running from source. */
 export function findStudio(): string | null {
+  const fs = builtin("node:fs");
+  const url = builtin("node:url");
+  if (!fs || !url) return null;
   for (const rel of ["../studio/", "../../dist/studio/"]) {
-    const dir = fileURLToPath(new URL(rel, import.meta.url));
-    if (existsSync(join(dir, "index.html"))) return dir;
+    const dir = url.fileURLToPath(new URL(rel, import.meta.url));
+    if (fs.existsSync(join(dir, "index.html"))) return dir;
   }
   return null;
+}
+
+/** Studio files from a folder. */
+export function dirSource(dir: string): StudioSource {
+  return {
+    async read(rel) {
+      const file = normalize(join(dir, rel));
+      if (!file.startsWith(dir.endsWith(sep) ? dir : dir + sep)) return null;
+      try {
+        const body = await (await import("node:fs/promises")).readFile(file);
+        return { body: new Uint8Array(body), type: TYPES[extname(file)] };
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
+/** Studio files from a Cloudflare Workers Assets binding whose directory is dist/studio. */
+export function assetsSource(assets: { fetch(request: Request): Promise<Response> }): StudioSource {
+  return {
+    async read(rel) {
+      const res = await assets.fetch(new Request(`https://assets.local/${rel}`));
+      if (!res.ok || !res.body) return null;
+      return { body: res.body, type: res.headers.get("content-type") ?? TYPES[extname(rel)] };
+    },
+  };
 }
 
 const isHttps = (c: Context) => c.req.header("x-forwarded-proto") === "https" || new URL(c.req.url).protocol === "https:";
@@ -41,7 +75,7 @@ main{max-width:440px;margin:16px;padding:32px;border-radius:20px;background:#fff
 }
 
 /** Studio: sign-in, sign-out and the single-page app under /studio. */
-export function mountStudio(app: Hono<any>, k: Kernel, dir: string | null) {
+export function mountStudio(app: Hono<any>, k: Kernel, source: StudioSource | null) {
   app.get("/studio", (c) => c.redirect("/studio/"));
 
   app.get("/studio/login", async (c) => {
@@ -63,25 +97,21 @@ export function mountStudio(app: Hono<any>, k: Kernel, dir: string | null) {
   });
 
   app.get("/studio/*", async (c) => {
-    if (!dir) {
+    if (!source) {
       return c.html(notice("Studio isn't built", "Run <code>npm run build</code> in the aicms repository, then restart the server."), 503);
     }
     const rel = decodeURIComponent(new URL(c.req.url).pathname.replace(/^\/studio\/?/, ""));
-    const file = normalize(join(dir, rel));
-    const inside = file.startsWith(dir.endsWith(sep) ? dir : dir + sep);
-    if (rel && inside && extname(file)) {
-      try {
-        const body = await readFile(file);
-        const immutable = rel.startsWith("assets/");
-        return c.body(body, 200, {
-          "content-type": TYPES[extname(file)] ?? "application/octet-stream",
-          "cache-control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
-        });
-      } catch {
-        return c.text("Not found", 404);
-      }
+    if (rel && extname(rel) && !rel.split("/").includes("..")) {
+      const file = await source.read(rel);
+      if (!file) return c.text("Not found", 404);
+      return c.body(file.body as unknown as ArrayBuffer, 200, {
+        "content-type": file.type ?? TYPES[extname(rel)] ?? "application/octet-stream",
+        "cache-control": rel.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+      });
     }
     // Client-side routes all get the app shell.
-    return c.body(await readFile(join(dir, "index.html")), 200, { "content-type": TYPES[".html"], "cache-control": "no-cache" });
+    const shell = await source.read("index.html");
+    if (!shell) return c.text("Studio's index.html is missing", 500);
+    return c.body(shell.body as unknown as ArrayBuffer, 200, { "content-type": TYPES[".html"], "cache-control": "no-cache" });
   });
 }

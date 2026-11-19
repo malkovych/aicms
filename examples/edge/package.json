@@ -1,0 +1,11 @@
+{
+  "name": "aicms-edge-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": { "aicms": "file:../.." },
+  "devDependencies": { "wrangler": "^4.165.0" }
+}

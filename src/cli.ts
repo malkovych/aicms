@@ -25,7 +25,8 @@ Usage: aicms <command> [options]
 Project
   init [dir]                    Create aicms.config.ts and example models
   dev | start                   Serve Studio, REST, MCP and events (--port 4321, --host 127.0.0.1)
-  login [--url <server>]        A one-time Studio sign-in link (valid 15 minutes)
+  login [--url <server>]        A one-time Studio sign-in link (valid 15 minutes);
+                                add --token <owner token> for a remote server
   describe [model]              What the site contains, as JSON
   types [--out <file>]          TypeScript types for @aicms/client (stdout by default)
 
@@ -402,6 +403,14 @@ async function main() {
 
     case "login": {
       const base = (values.url ?? `http://127.0.0.1:${process.env.PORT ?? 4321}`).replace(/\/+$/, "");
+      if (values.token) {
+        // A remote server (e.g. on the edge): ask it for a code with the owner token.
+        const res = await fetch(`${base}/api/v1/actions/cms.login_code`, { method: "POST", headers: { authorization: `Bearer ${values.token}`, "content-type": "application/json" }, body: "{}" });
+        const body: any = await res.json().catch(() => ({}));
+        if (!res.ok) fail(body?.error?.message ?? `HTTP ${res.status} from ${base}`);
+        console.log(`${green("✓")} Open this link within 15 minutes to sign in to Studio (it works once):\n\n  ${bold(base + body.path)}`);
+        break;
+      }
       const code = await k.createLoginCode();
       console.log(`${green("✓")} Open this link within 15 minutes to sign in to Studio (it works once):\n\n  ${bold(`${base}/studio/login?code=${code}`)}`);
       break;

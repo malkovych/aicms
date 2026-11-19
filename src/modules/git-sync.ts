@@ -1,4 +1,5 @@
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+// File access is loaded on first use: git-sync needs a file system (servers, not the edge).
+const fsp = () => import("node:fs/promises");
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { z } from "zod";
@@ -56,15 +57,15 @@ export function gitSync(opts: GitSyncOptions = {}) {
     const e = await c.entry(id);
     const m = e && mirrored(c).find((x) => x.name === e.model);
     if (!e || !m) {
-      if (previous) await rm(resolve(c.projectDir, previous), { force: true });
+      if (previous) await (await fsp()).rm(resolve(c.projectDir, previous), { force: true });
       await c.kv.delete(`file:${id}`);
       return null;
     }
     // A file keeps the name it already has (an author may have named it); new entries are named by slug.
     const file = previous ? resolve(c.projectDir, previous) : fileFor(c, m, e);
     const rel = relative(c.projectDir, file);
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, toMarkdown(m, e, c.site.defaultLocale));
+    await (await fsp()).mkdir(dirname(file), { recursive: true });
+    await (await fsp()).writeFile(file, toMarkdown(m, e, c.site.defaultLocale));
     await c.kv.set(`file:${id}`, rel);
     return rel;
   }
@@ -84,7 +85,7 @@ export function gitSync(opts: GitSyncOptions = {}) {
   async function* walk(dir: string): AsyncGenerator<string> {
     let items: import("node:fs").Dirent[];
     try {
-      items = await readdir(dir, { withFileTypes: true });
+      items = await (await fsp()).readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
@@ -107,7 +108,7 @@ export function gitSync(opts: GitSyncOptions = {}) {
         continue;
       }
       try {
-        const text = await readFile(file, "utf8");
+        const text = await (await fsp()).readFile(file, "utf8");
         const { front, body } = fromMarkdown(text);
         const { id, locale, ...fields } = front as { id?: string; locale?: string } & Record<string, unknown>;
         const unknown = Object.keys(fields).filter((k) => !(k in m.fields));
@@ -136,7 +137,7 @@ export function gitSync(opts: GitSyncOptions = {}) {
             const d = await c.draft(m.name, { ...incoming, ...(locale ? { locale } : {}) });
             // Write the new id into the file's frontmatter, leaving the rest as the author wrote it,
             // so the next import updates this entry instead of creating a duplicate.
-            await writeFile(file, /^---\r?\n/.test(text) ? text.replace(/^---\r?\n/, `---\nid: ${d.id}\n`) : `---\nid: ${d.id}\n---\n\n${text}`);
+            await (await fsp()).writeFile(file, /^---\r?\n/.test(text) ? text.replace(/^---\r?\n/, `---\nid: ${d.id}\n`) : `---\nid: ${d.id}\n---\n\n${text}`);
             await c.kv.set(`file:${d.id}`, rel);
           }
           report.created.push(rel);

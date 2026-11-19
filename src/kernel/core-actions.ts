@@ -364,6 +364,16 @@ export function coreActions(): RegisteredAction[] {
       },
     },
     {
+      name: "cms.login_code",
+      description: "For the owner: a one-time Studio sign-in code (15 minutes), for servers without a terminal such as the edge. Open /studio/login?code=<code>.",
+      visible: (a) => allows(a.scopes, "studio:login"),
+      schema: () => z.strictObject({}),
+      async run(_input: Record<string, never>, { kernel }) {
+        const code = await kernel.createLoginCode();
+        return { code, path: `/studio/login?code=${code}`, expiresInMinutes: 15 };
+      },
+    },
+    {
       name: "cms.modules",
       description: "Installed modules and what each may do (models, Actions, scopes, routes, hooks), plus official modules that can be installed. Propose one with cms_propose_module.",
       readOnly: true,

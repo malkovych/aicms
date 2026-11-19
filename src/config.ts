@@ -3,6 +3,7 @@ import type { ModuleDef } from "./kernel/modules.ts";
 import type { Budget, ReviewMode } from "./kernel/policy.ts";
 import type { SqliteOptions } from "./store/sqlite.ts";
 import type { PostgresOptions } from "./store/postgres.ts";
+import type { D1Options } from "./store/d1.ts";
 import { DEFAULT_REGISTRY } from "./registry.ts";
 
 export interface AgentConfig {
@@ -26,7 +27,7 @@ export interface Config {
   /** Shown to agents in cms_describe and llms.txt. */
   name?: string;
   /** sqlite(".aicms/data.db") (default) or postgres({ url }). */
-  db?: SqliteOptions | PostgresOptions;
+  db?: SqliteOptions | PostgresOptions | D1Options;
   /** The first locale is the default. */
   locales?: string[];
   /** Defaults to every model in ./models when loaded through the CLI. */
@@ -42,7 +43,7 @@ export interface Config {
 
 export interface ResolvedConfig {
   name: string;
-  db: SqliteOptions | PostgresOptions;
+  db: SqliteOptions | PostgresOptions | D1Options;
   locales: string[];
   models: Model[];
   modules: ModuleDef[];

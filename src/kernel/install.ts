@@ -1,4 +1,3 @@
-import { addModuleToFile } from "../config-edit.ts";
 import { catalog, findCatalog } from "../modules/catalog.ts";
 import { AicmsError } from "./errors.ts";
 import { moduleManifest } from "./modules.ts";
@@ -21,6 +20,7 @@ export async function installFromCatalog(k: Kernel, name: string) {
   let note: string | undefined;
   if (k.configFile) {
     try {
+      const { addModuleToFile } = await import("../config-edit.ts");
       addModuleToFile(k.configFile, { name: entry.importName, from: "aicms/modules", isDefault: false, call: `${entry.importName}()` });
       persisted = true;
     } catch (e) {
