@@ -93,7 +93,7 @@ class Client:
     # ---------- transport ----------
 
     def _request_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-        h = {"user-agent": "aicms-python/0.2.0", **self._headers}
+        h = {"user-agent": "aicms-python/0.4.0", **self._headers}
         if self.token:
             h["authorization"] = f"Bearer {self.token}"
         h.update(extra or {})

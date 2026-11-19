@@ -1,6 +1,6 @@
 {
   "name": "@aicms/client",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Typed client for AICMS: REST actions, live events and a safe blocks-to-HTML renderer. No dependencies.",
   "license": "MIT",
   "repository": {

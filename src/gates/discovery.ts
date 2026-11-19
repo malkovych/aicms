@@ -2,7 +2,7 @@ import { typeLabel } from "../schema/fields.ts";
 import type { Kernel } from "../kernel/cms.ts";
 import { modelPermissions, type Actor } from "../kernel/policy.ts";
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.4.0";
 
 /** /llms.txt: a plain description of the site for any agent, no token needed. */
 export function llmsTxt(k: Kernel, actor: Actor, origin: string): string {

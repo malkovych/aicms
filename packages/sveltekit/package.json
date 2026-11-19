@@ -1,9 +1,13 @@
 {
   "name": "@aicms/sveltekit",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AICMS for SvelteKit: load helpers with dependency tracking and cache headers, live updates, blocks to HTML.",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/malkovych/aicms.git", "directory": "packages/sveltekit" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/malkovych/aicms.git",
+    "directory": "packages/sveltekit"
+  },
   "homepage": "https://malkovych.github.io/aicms/",
   "type": "module",
   "sideEffects": false,
@@ -14,9 +18,22 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "src"],
-  "scripts": { "build": "tsc -b" },
-  "dependencies": { "@aicms/client": "^0.3.0" },
-  "peerDependencies": { "@sveltejs/kit": ">=2" },
-  "peerDependenciesMeta": { "@sveltejs/kit": { "optional": true } }
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aicms/client": "^0.4.0"
+  },
+  "peerDependencies": {
+    "@sveltejs/kit": ">=2"
+  },
+  "peerDependenciesMeta": {
+    "@sveltejs/kit": {
+      "optional": true
+    }
+  }
 }

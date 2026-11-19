@@ -3,7 +3,7 @@
 > A CMS where AI agents are first-class users and people are the editors and owners.
 > Describe a model once and get REST, MCP tools, an admin and types.
 
-Status: v0.3 · phase 2 works: module SDK, `aicms add`, official modules (seo, search, media, i18n, git-sync), module proposals in Inbox, GraphQL, Nuxt and SvelteKit, on top of phases 0 and 1 · [Українською](ARCHITECTURE.uk.md)
+Status: v0.4 · phase 3 works: Postgres, Cloudflare Workers with D1 and R2, real-time presence, a module registry, A2A and commerce, on top of phases 0–2 · [Українською](ARCHITECTURE.uk.md)
 
 ---
 
@@ -100,7 +100,15 @@ Six core tables, however many models you have:
 | `media` | files, metadata, alt text |
 | `tokens` | agent tokens, stored only as SHA-256 hashes |
 
-Fields marked `indexed: true` or `unique: true` get expression indexes (`json_extract(data, '$.slug')`), which SQLite and Postgres both support. Modules may add their own index tables (the search module adds embeddings).
+Fields marked `indexed: true` or `unique: true` get expression indexes (`json_extract(data, '$.slug')` in SQLite, `data->'slug'` on Postgres JSONB). Modules keep small values in a `kv` table; the search module keeps its own term index.
+
+One `Store` interface, three adapters, and the whole test suite runs on each:
+
+| `db:` | Where | Notes |
+|---|---|---|
+| `sqlite(".aicms/data.db")` | servers, the default | `node:sqlite`, nothing to install |
+| `postgres({ url })` | servers | JSONB; `npm install pg`; merges in one transaction with row locks |
+| `d1("DB")` | Cloudflare Workers | merges are planned, then applied in one atomic batch; the versions primary key catches concurrent changes |
 
 ### 4.5 Module Loader
 - Modules are listed in `aicms.config.ts`.
@@ -260,10 +268,24 @@ Shipped in phase 2 (`import { seo, search, media, i18n, gitSync } from "aicms/mo
 | `i18n` | translation groups across locales, what's missing per locale, `i18n_translate` drafts a translation that goes through review |
 | `git-sync` | published content mirrored to Markdown with frontmatter; edited files come back as a changeset (`aicms sync import`), so pull requests can feed the Inbox |
 
-Next: `forms` · `commerce` · `reviews` · `redirects` · `analytics` · `workflows` (multi-step agent processes), vector search and AI image tools.
+Added in phase 3:
+
+| Module | What it gives |
+|---|---|
+| `commerce` | products and orders, a public checkout that prices on the server, stock, order statuses with history, `commerce_orders` / `commerce_set_status` / `commerce_stats`; requires `payments` |
+| `manual-payments` | provides `payments`: bank transfer or cash on delivery, a person marks orders paid |
+| `stripe` | provides `payments`: Stripe Checkout, signed webhooks, refunds |
+
+Payment providers report through a `payment.updated` event, so swapping Stripe for another provider doesn't touch commerce.
+
+Next: `forms` · `reviews` · `redirects` · `analytics` · `workflows` (multi-step agent processes), vector search and AI image tools.
 
 ### 6.4 Agents proposing modules
 An agent may propose installing a module. The proposal arrives in Inbox as a changeset of a special kind, listing the scopes and models the module asks for. A person with the `modules:install` scope installs it from the Inbox (`cms_propose_module`, then Approve); agents never install code themselves. A declined proposal is closed, not reopened.
+
+### 6.5 Registry
+
+`docs/registry.json` (served at `https://malkovych.github.io/aicms/registry.json`) lists official and community modules with what each declares: provides, requires, uses, scopes, routes, hooks. `aicms search <words>` finds modules; `aicms add <name>` installs a community module from npm and refuses it if its manifest asks for more than its entry declares. Community modules are added in a terminal, where the code can be reviewed; the server never installs them by itself, and agents can only propose official modules. To list a module, open a pull request that adds its entry.
 
 ## 7. Connecting agents
 
@@ -278,7 +300,7 @@ An agent may propose installing a module. The proposal arrives in Inbox as a cha
 | **SDK** | your own agents | `@aicms/client` (TS), `aicms` (PyPI) | 1 |
 | **SSE events** | agents that react to changes | `/api/v1/events` | 1 |
 | **GraphQL** | frontends with complex queries; references resolve to entries | `/graphql` | 2 ✓ |
-| **A2A** | agent-to-agent | `/.well-known/agent.json` | 3 |
+| **A2A** | agent-to-agent: an Agent Card and JSON-RPC, every Action a skill | `/.well-known/agent-card.json`, `/a2a` | 3 ✓ |
 
 ### 7.2 Tools an agent sees
 
@@ -297,6 +319,7 @@ An agent only sees what its scopes allow. MCP tool names use underscores (`post_
 | `cms_review` / `cms_merge` / `cms_reject` | `cms.review` … | for reviewers with `changesets:review` |
 | `cms_history` / `cms_restore` / `cms_revert` | `cms.history` … | an entry's versions; draft the restore of any version, or the undo of a merged changeset |
 | `cms_discard` | `cms.discard` | drop drafts that weren't submitted |
+| `cms_presence` | `cms.presence` | who is viewing or editing an entry right now, and whose drafts of it would conflict |
 | `cms_modules` / `cms_propose_module` | `cms.modules` … | installed modules with their permissions, official ones to propose; `cms_install_module` for admins (`modules:install`) |
 | `cms_agents` / `cms_token` / `cms_revoke` / `cms_log` | `cms.agents` … | for admins (`agents:manage`, `events:read`): agents, tokens, the action log |
 | `<module>_<action>` | `<module>.<action>` | module Actions |
@@ -332,7 +355,9 @@ Shipped in phase 1:
 
 Added in phase 2: **Media** (a library with drag-and-drop upload and alt text), **Modules** (manifests and one-click install), module proposals in **Inbox**, a media picker in forms, and SEO and translation panels beside each entry.
 
-Next: **⌘K** (commands and plain language: “find posts without a cover” → `post.list` with a filter), **presence** (who is editing an entry right now, Yjs), a block editor beside the frontend's live preview, and roles for people other than the owner.
+Added in phase 3: **presence**. The editor shows who else is on an entry, people and agents (an agent drafting a change appears as editing it), and warns when someone else's draft of it would conflict.
+
+Next: **⌘K** (commands and plain language: “find posts without a cover” → `post.list` with a filter), co-editing with Yjs, a block editor beside the frontend's live preview, and roles for people other than the owner.
 
 ## 9. Frameworks
 
@@ -369,14 +394,14 @@ export default async function Post({ params }) {
 Deployment modes:
 - **Embedded:** AICMS mounts as a route handler inside Next.js / Nuxt / SvelteKit. One deploy.
 - **Standalone:** `aicms start` or a Docker image.
-- **Edge:** Cloudflare Workers + D1 + R2.
+- **Edge:** Cloudflare Workers + D1 + R2: `export default createWorker(config)` from `aicms/edge`, Studio from Workers Assets, the owner token from a secret (`examples/edge`).
 
 ## 10. Kernel stack
 
 | Layer | Choice | Why |
 |---|---|---|
 | Language | TypeScript | types end to end, from schema to frontend |
-| Database | `node:sqlite` | built into Node 22+, no native builds; Postgres later behind the same `Store` interface |
+| Database | `node:sqlite`, Postgres, D1 | SQLite built into Node 22+; Postgres (JSONB) and Cloudflare D1 behind the same `Store` interface |
 | HTTP | Hono | runs on any runtime, web standards |
 | Validation | Zod 4 | one schema → JSON Schema for agents |
 | MCP | official TypeScript SDK | Streamable HTTP (web-standard transport) + stdio |
@@ -404,7 +429,7 @@ Deployment modes:
 | **0. Kernel** ✓ | Schema Engine, Action Bus, policies, changesets, event log, SQLite store, REST, MCP, discovery, webhooks, CLI | an agent drafts content over MCP, a person merges it |
 | **1. Human in the loop** ✓ | Studio MVP and Inbox, rollback, SSE events, TypeScript and Python SDKs, Next.js and Astro adapters | the first real site |
 | **2. Lego** ✓ | module SDK, `aicms add`, official modules (seo, i18n, media, search, git-sync), agents propose modules via Inbox, GraphQL, Nuxt and SvelteKit | the ecosystem starts growing |
-| **3. Scale** | Postgres and edge, real-time presence, module registry, A2A, commerce | production for shops and media |
+| **3. Scale** ✓ | Postgres and edge, real-time presence, module registry, A2A, commerce | production for shops and media |
 
 ## 13. Decisions
 

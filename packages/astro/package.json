@@ -1,6 +1,6 @@
 {
   "name": "@aicms/astro",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AICMS for Astro: a Content Layer loader with rendered blocks.",
   "license": "MIT",
   "repository": {
@@ -26,7 +26,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@aicms/client": "^0.3.0"
+    "@aicms/client": "^0.4.0"
   },
   "peerDependencies": {
     "astro": ">=5"

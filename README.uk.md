@@ -4,7 +4,7 @@
 
 [Сайт](https://malkovych.github.io/aicms/uk/) · [Архітектура](ARCHITECTURE.uk.md) · [English](README.md)
 
-> Статус: фаза 2 працює. Модулі тепер додаються як цеглинки: `aicms add seo` і офіційні модулі seo, search, media, i18n та git-sync, агенти пропонують модулі через «Вхідні», є GraphQL і адаптери для Next.js, Nuxt, SvelteKit та Astro. Усе це поверх ядра й Studio з фаз 0 і 1. Далі масштаб: Postgres, edge, реєстр модулів.
+> Статус: фаза 3 працює. AICMS працює на SQLite, Postgres або Cloudflare Workers з D1 і R2; Studio показує, хто зараз працює із записом; модулі беруться з перевіреного реєстру; інші агенти підключаються через A2A; а commerce додає товари, замовлення й checkout з ручною оплатою або Stripe. Усе це поверх ядра, Studio, модулів і адаптерів з фаз 0–2.
 
 ## Навіщо
 
@@ -53,10 +53,22 @@ aicms add search       # пошук будь-якою мовою з ранжув
 aicms add media        # медіатека із завантаженням, розмірами зображень і alt-текстом
 aicms add i18n         # переклади між мовами
 aicms add git-sync     # контент як Markdown-файли; правки повертаються на рев'ю
+aicms add commerce     # товари, замовлення, checkout (підтягне manual-payments; або додай stripe)
+aicms search reviews   # пошук модулів у реєстрі
 aicms modules          # що встановлено і що кожному модулю дозволено
 ```
 
 Модуль — один файл: що він дає й потребує, його моделі, Actions, хуки й маршрути. `aicms module new reviews` створює заготовку. Перед встановленням видно права модуля; агент може запропонувати модуль (`cms_propose_module`), а встановлює людина з «Вхідних».
+
+## Де працює
+
+```ts
+db: sqlite(".aicms/data.db")             // за замовчуванням, вбудований у Node
+db: postgres({ url: process.env.DATABASE_URL })   // npm install pg
+db: d1("DB")                             // Cloudflare Workers, див. examples/edge
+```
+
+На Cloudflare усе роздає один Worker: `export default createWorker(config)` з `aicms/edge`, медіа в R2, Studio з Workers Assets. Див. [examples/edge](examples/edge).
 
 ## Studio
 
@@ -67,6 +79,7 @@ Studio — адмінка для людей за адресою `/studio/`:
 - **Агенти:** scopes, режим рев'ю, використання бюджету, незавершена робота; видача й відкликання токенів.
 - **Медіа** і **Модулі:** медіатека, маніфести модулів і встановлення одним кліком; панелі SEO й перекладів біля кожного запису.
 - **Журнал:** кожна дія людей і агентів наживо.
+- **Присутність:** хто ще працює із записом, люди й агенти, і попередження, коли чиясь чернетка створить конфлікт.
 
 Англійська й українська, світла й темна теми, працює на телефоні.
 
@@ -105,9 +118,10 @@ cms.submit(note="Перший пост")
 |---|---|
 | Поля, моделі, Markdown ↔ блоки, slugs | `src/schema/` |
 | Action Bus, політики, changesets, відкат, SDK модулів і встановлення, стрічка подій | `src/kernel/` |
-| Офіційні модулі: seo, search, media, i18n, git-sync | `src/modules/` |
-| Сховище SQLite: entries, versions, changesets, events, media, tokens | `src/store/` |
-| REST, OpenAPI, GraphQL, discovery, MCP, SSE, маршрути модулів, Studio | `src/gates/` |
+| Офіційні модулі: seo, search, media, i18n, git-sync, commerce, оплата | `src/modules/` |
+| Сховища: SQLite (node:sqlite або D1) і Postgres | `src/store/` |
+| REST, OpenAPI, GraphQL, A2A, discovery, MCP, SSE, маршрути модулів, Studio | `src/gates/` |
+| Вхід для Cloudflare Workers, реєстр модулів | `src/edge.ts`, `src/registry.ts` |
 | CLI, `aicms types`, правки конфігу для `aicms add` | `src/cli.ts`, `src/typegen.ts`, `src/config-edit.ts` |
 | Studio (React + Framer Motion, готова збірка лежить у `dist/studio`) | `studio/` |
 | TypeScript-клієнт і адаптери фреймворків | `packages/` |
@@ -117,6 +131,7 @@ cms.submit(note="Перший пост")
 
 ```bash
 npm test             # ядро, входи, SDK і адаптери (node:test, без збірки)
+npm run test:pg      # той самий набір на Postgres (PGlite у процесі)
 npm run test:python  # клієнт для Python
 npm run typecheck
 npm run build        # dist/ для CLI, пакетів і Studio

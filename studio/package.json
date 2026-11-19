@@ -1,6 +1,6 @@
 {
   "name": "@aicms/studio",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "AICMS Studio: the admin for people. Built into the aicms package at dist/studio.",
   "license": "MIT",
@@ -10,7 +10,7 @@
     "build": "vite build"
   },
   "devDependencies": {
-    "@aicms/client": "^0.3.0",
+    "@aicms/client": "^0.4.0",
     "@fontsource-variable/geologica": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource-variable/unbounded": "^5.3.0",

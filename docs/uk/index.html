@@ -47,7 +47,7 @@
   <!-- ================= HERO ================= -->
   <div class="wrap hero">
     <div>
-      <div class="eyebrow">Відкритий код · MIT · v0.3 · листопад 2026</div>
+      <div class="eyebrow">Відкритий код · MIT · v0.4 · листопад 2026</div>
       <h1 class="wordmark"><span class="ai">AI</span>CMS</h1>
       <p class="lead">CMS, у якій AI-агенти працюють з контентом так само природно, як люди.</p>
       <p class="body">Опиши модель один раз. AICMS сам згенерує API, MCP-інструменти для агентів, адмінку для людей і типи для фронтенду. Модулі додаються як цеглинки, а кожна зміна агента проходить перевірку і відкочується одним кліком.</p>
@@ -67,7 +67,7 @@
         <a class="pri" href="https://github.com/malkovych/aicms">Відкрити на GitHub</a>
         <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.uk.md">Читати специфікацію</a>
       </div>
-      <div class="status"><i></i><span>Фаза 2 працює: модулі додаються через <code>aicms add</code>; seo, search, media, i18n, git-sync; GraphQL; Nuxt і SvelteKit.</span></div>
+      <div class="status"><i></i><span>Фаза 3 працює: Postgres і Cloudflare Workers, присутність наживо, реєстр модулів, A2A і commerce.</span></div>
     </div>
 
     <div class="demo" aria-label="Одна модель генерує всі інтерфейси">
@@ -491,7 +491,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
         <div class="plate gate"><h3>GraphQL</h3><span class="ep">/graphql</span><p>Генерується з моделей; посилання розгортаються в записи, права ті самі.</p></div>
         <div class="plate gate"><h3>SDK</h3><span class="ep">@aicms/client · pip install aicms</span><p>Власні агенти на TypeScript і Python з типами зі схем.</p></div>
         <div class="plate gate"><h3>Events</h3><span class="ep">webhooks · /events (SSE)</span><p>Агент реагує на зміни: новий відгук, нове замовлення, публікація.</p></div>
-        <div class="plate gate"><h3>A2A</h3><span class="ep">/.well-known/agent.json</span><p>Картка агента для протоколу агент-до-агента.</p></div>
+        <div class="plate gate"><h3>A2A</h3><span class="ep">/.well-known/agent-card.json · /a2a</span><p>Інші агенти знаходять сайт і викликають його Actions як навички.</p></div>
         <div class="plate gate"><h3>Discovery</h3><span class="ep">/llms.txt · /.well-known/aicms.json</span><p>Агент сам дізнається, які моделі й дії тут є.</p></div>
       </div>
 
@@ -745,7 +745,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
         <div class="plate ph"><span class="n">Фаза 0 · готово</span><h3>Ядро</h3><ul><li>Schema Engine</li><li>Action Bus і політики</li><li>Changesets і журнал подій</li><li>SQLite-сховище</li><li>REST і MCP</li><li>CLI</li></ul><p class="res">Агент пише чернетки через MCP, людина їх мерджить</p></div>
         <div class="plate ph"><span class="n">Фаза 1 · готово</span><h3>Людина в контурі</h3><ul><li>Studio: «Вхідні», контент, агенти, журнал</li><li>Відкат: відновити версію, скасувати changeset</li><li>Події наживо через SSE</li><li>SDK для TypeScript і Python</li><li>Адаптери Next.js і Astro</li></ul><p class="res">Перший реальний сайт</p></div>
         <div class="plate ph"><span class="n">Фаза 2 · готово</span><h3>Lego</h3><ul><li>SDK модулів, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>Модуль git-sync</li><li>Агенти пропонують модулі через «Вхідні»</li><li>Nuxt, SvelteKit</li></ul><p class="res">Екосистема модулів починає рости</p></div>
-        <div class="plate ph"><span class="n">Фаза 3</span><h3>Масштаб</h3><ul><li>Postgres і edge</li><li>Спільне редагування</li><li>Реєстр модулів, A2A</li><li>commerce</li></ul><p class="res">Продакшн для магазинів і медіа</p></div>
+        <div class="plate ph"><span class="n">Фаза 3 · готово</span><h3>Масштаб</h3><ul><li>Postgres і Cloudflare Workers (D1, R2)</li><li>Присутність наживо в Studio</li><li>Реєстр модулів, A2A</li><li>Commerce зі Stripe або ручною оплатою</li></ul><p class="res">Продакшн для магазинів і медіа</p></div>
       </div>
       <div class="duo">
         <div class="plate note">

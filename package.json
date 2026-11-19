@@ -1,6 +1,6 @@
 {
   "name": "aicms",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CMS for AI agents: one schema generates REST, MCP tools, admin and types",
   "license": "MIT",
   "repository": {

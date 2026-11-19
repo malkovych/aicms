@@ -47,7 +47,7 @@
   <!-- ================= HERO ================= -->
   <div class="wrap hero">
     <div>
-      <div class="eyebrow">Open source · MIT · v0.3 · November 2026</div>
+      <div class="eyebrow">Open source · MIT · v0.4 · November 2026</div>
       <h1 class="wordmark"><span class="ai">AI</span>CMS</h1>
       <p class="lead">A CMS where AI agents work with content as naturally as people do.</p>
       <p class="body">Describe a model once. AICMS generates the API, MCP tools for agents, an admin for people and types for your frontend. Modules snap in like bricks, and every change an agent makes is reviewed and can be rolled back in one click.</p>
@@ -67,7 +67,7 @@
         <a class="pri" href="https://github.com/malkovych/aicms">View on GitHub</a>
         <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.md">Read the spec</a>
       </div>
-      <div class="status"><i></i><span>Phase 2 works: modules snap in with <code>aicms add</code>; seo, search, media, i18n, git-sync; GraphQL; Nuxt and SvelteKit.</span></div>
+      <div class="status"><i></i><span>Phase 3 works: Postgres and Cloudflare Workers, live presence, a module registry, A2A and commerce.</span></div>
     </div>
 
     <div class="demo" aria-label="One model generates every interface">
@@ -491,7 +491,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
         <div class="plate gate"><h3>GraphQL</h3><span class="ep">/graphql</span><p>Generated from your models; references resolve to entries, same permissions.</p></div>
         <div class="plate gate"><h3>SDK</h3><span class="ep">@aicms/client · pip install aicms</span><p>Your own agents in TypeScript and Python, typed from the schemas.</p></div>
         <div class="plate gate"><h3>Events</h3><span class="ep">webhooks · /events (SSE)</span><p>Agents react to changes: a new review, a new order, a publish.</p></div>
-        <div class="plate gate"><h3>A2A</h3><span class="ep">/.well-known/agent.json</span><p>An agent card for the agent-to-agent protocol.</p></div>
+        <div class="plate gate"><h3>A2A</h3><span class="ep">/.well-known/agent-card.json · /a2a</span><p>Other agents discover the site and call its Actions as skills.</p></div>
         <div class="plate gate"><h3>Discovery</h3><span class="ep">/llms.txt · /.well-known/aicms.json</span><p>An agent finds out on its own which models and actions exist.</p></div>
       </div>
 
@@ -745,7 +745,7 @@ Snow reflects up to 80% of UV rays.
         <div class="plate ph"><span class="n">Phase 0 · done</span><h3>Kernel</h3><ul><li>Schema Engine</li><li>Action Bus and policies</li><li>Changesets and event log</li><li>SQLite storage</li><li>REST and MCP</li><li>CLI</li></ul><p class="res">An agent drafts content over MCP, a person merges it</p></div>
         <div class="plate ph"><span class="n">Phase 1 · done</span><h3>Human in the loop</h3><ul><li>Studio: Inbox, Content, Agents, Activity</li><li>Rollback: restore a version, undo a changeset</li><li>Live events over SSE</li><li>TypeScript and Python SDKs</li><li>Next.js and Astro adapters</li></ul><p class="res">The first real site</p></div>
         <div class="plate ph"><span class="n">Phase 2 · done</span><h3>Lego</h3><ul><li>Module SDK, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>git-sync module</li><li>Agents propose modules via Inbox</li><li>Nuxt, SvelteKit</li></ul><p class="res">The module ecosystem starts growing</p></div>
-        <div class="plate ph"><span class="n">Phase 3</span><h3>Scale</h3><ul><li>Postgres and edge</li><li>Real-time co-editing</li><li>Module registry, A2A</li><li>commerce</li></ul><p class="res">Production for shops and media</p></div>
+        <div class="plate ph"><span class="n">Phase 3 · done</span><h3>Scale</h3><ul><li>Postgres and Cloudflare Workers (D1, R2)</li><li>Live presence in Studio</li><li>Module registry, A2A</li><li>Commerce with Stripe or manual payments</li></ul><p class="res">Production for shops and media</p></div>
       </div>
       <div class="duo">
         <div class="plate note">

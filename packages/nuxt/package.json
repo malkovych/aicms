@@ -1,6 +1,6 @@
 {
   "name": "@aicms/nuxt",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AICMS for Nuxt: a module with an auto-imported client, typed data fetching and cache invalidation from webhooks.",
   "license": "MIT",
   "repository": {
@@ -23,7 +23,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@aicms/client": "^0.3.0",
+    "@aicms/client": "^0.4.0",
     "@nuxt/kit": "^4.6.4"
   },
   "peerDependencies": {

@@ -4,7 +4,7 @@
 
 [Website](https://malkovych.github.io/aicms/) · [Architecture](ARCHITECTURE.md) · [Українською](README.uk.md)
 
-> Status: phase 2 works. Modules now snap in like bricks: `aicms add seo` and the official seo, search, media, i18n and git-sync modules, agents proposing modules through the Inbox, a GraphQL gate, and adapters for Next.js, Nuxt, SvelteKit and Astro. On top of the kernel and Studio from phases 0 and 1. Scale (Postgres, edge, a module registry) comes next.
+> Status: phase 3 works. AICMS runs on SQLite, Postgres or Cloudflare Workers with D1 and R2; Studio shows who is working on an entry right now; modules come from a reviewed registry; other agents connect over A2A; and commerce adds products, orders and checkout with manual payments or Stripe. All on top of the kernel, Studio, modules and adapters from phases 0–2.
 
 ## Why
 
@@ -87,10 +87,22 @@ aicms add search       # ranked full-text search in any language
 aicms add media        # media library with uploads, image sizes and alt text
 aicms add i18n         # translations across locales
 aicms add git-sync     # content as Markdown files; edits come back for review
+aicms add commerce     # products, orders, checkout (pulls in manual-payments; or add stripe)
+aicms search reviews   # find modules in the registry
 aicms modules          # what is installed and what each module may do
 ```
 
 A module is one file: what it provides and requires, its models, Actions, hooks and routes. `aicms module new reviews` scaffolds one. Before anything is installed you see its permissions; an agent can propose a module (`cms_propose_module`), and a person installs it from the Inbox.
+
+## Where it runs
+
+```ts
+db: sqlite(".aicms/data.db")             // default, built into Node
+db: postgres({ url: process.env.DATABASE_URL })   // npm install pg
+db: d1("DB")                             // Cloudflare Workers, see examples/edge
+```
+
+On Cloudflare, one Worker serves everything: `export default createWorker(config)` from `aicms/edge`, with media in R2 and Studio from Workers Assets. See [examples/edge](examples/edge).
 
 ## Studio
 
@@ -101,6 +113,7 @@ Studio is the admin for people, served at `/studio/`:
 - **Agents:** scopes, review mode, budget use and pending work; issue or revoke tokens.
 - **Media** and **Modules:** the media library, module manifests and one-click install; SEO and translation panels beside each entry.
 - **Activity:** every action by people and agents, live.
+- **Presence:** who else is on an entry, people and agents, and a warning when someone's draft would conflict.
 
 English and Ukrainian, light and dark themes, works on a phone.
 
@@ -139,9 +152,10 @@ cms.submit(note="First post")
 |---|---|
 | Field builders, models, Markdown ↔ blocks, slugs | `src/schema/` |
 | Action Bus, policies, changesets, rollback, module SDK and installs, live feed | `src/kernel/` |
-| Official modules: seo, search, media, i18n, git-sync | `src/modules/` |
-| SQLite store: entries, versions, changesets, events, media, tokens | `src/store/` |
-| REST, OpenAPI, GraphQL, discovery, MCP, SSE, module routes, Studio | `src/gates/` |
+| Official modules: seo, search, media, i18n, git-sync, commerce, payments | `src/modules/` |
+| Stores: SQLite (node:sqlite or D1) and Postgres | `src/store/` |
+| REST, OpenAPI, GraphQL, A2A, discovery, MCP, SSE, module routes, Studio | `src/gates/` |
+| Cloudflare Workers entry, module registry | `src/edge.ts`, `src/registry.ts` |
 | CLI, `aicms types`, config edits for `aicms add` | `src/cli.ts`, `src/typegen.ts`, `src/config-edit.ts` |
 | Studio (React + Framer Motion, shipped prebuilt in `dist/studio`) | `studio/` |
 | TypeScript client and framework adapters | `packages/` |
@@ -151,6 +165,7 @@ cms.submit(note="First post")
 
 ```bash
 npm test             # kernel, gates, SDK and adapters (node:test, no build step)
+npm run test:pg      # the same suite on Postgres (PGlite, in-process)
 npm run test:python  # Python client
 npm run typecheck
 npm run build        # dist/ for the CLI, the packages and Studio
