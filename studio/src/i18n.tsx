@@ -29,6 +29,9 @@ const en = {
   "modules.allModels": "all models",
   "modules.anyone": "anyone signed in",
   "modules.proposeOnly": "Agents can propose these; installing is up to you.",
+  "modules.community": "From the community",
+  "modules.communityNote": "Community modules are npm packages. Add them from your terminal, where you can review the code; aicms add refuses a package that asks for more than its entry declares.",
+  "modules.by": "by {author}",
 
   "media.title": "Media",
   "media.lead": "Files for your entries. Add alt text so everyone can understand the images.",
@@ -227,6 +230,9 @@ const uk: Record<Key, string> = {
   "modules.allModels": "усі моделі",
   "modules.anyone": "будь-хто з токеном",
   "modules.proposeOnly": "Агенти можуть їх запропонувати; встановлюєш ти.",
+  "modules.community": "Від спільноти",
+  "modules.communityNote": "Модулі спільноти — це npm-пакети. Додавай їх із термінала, де можна переглянути код; aicms add відмовить пакету, який просить більше, ніж заявлено в реєстрі.",
+  "modules.by": "автор: {author}",
 
   "media.title": "Медіа",
   "media.lead": "Файли для записів. Додавай alt-текст, щоб зображення були зрозумілі всім.",

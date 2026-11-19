@@ -3,6 +3,7 @@ import type { ModuleDef } from "./kernel/modules.ts";
 import type { Budget, ReviewMode } from "./kernel/policy.ts";
 import type { SqliteOptions } from "./store/sqlite.ts";
 import type { PostgresOptions } from "./store/postgres.ts";
+import { DEFAULT_REGISTRY } from "./registry.ts";
 
 export interface AgentConfig {
   /** e.g. ["post:draft", "tag:read", "post:update.seo"] */
@@ -35,6 +36,8 @@ export interface Config {
   /** Scopes for requests without a token, e.g. ["post:read"]. */
   public?: string[];
   webhooks?: WebhookConfig[];
+  /** The module registry used by `aicms search` / `aicms add`: a URL or file, or false. Default: the AICMS registry. */
+  registry?: string | false;
 }
 
 export interface ResolvedConfig {
@@ -46,6 +49,7 @@ export interface ResolvedConfig {
   agents: Record<string, AgentConfig>;
   public: string[];
   webhooks: WebhookConfig[];
+  registry: string | false;
 }
 
 export function defineConfig(config: Config): Config {
@@ -72,5 +76,6 @@ export function resolveConfig(c: Config): ResolvedConfig {
     agents,
     public: c.public ?? [],
     webhooks: c.webhooks ?? [],
+    registry: c.registry ?? DEFAULT_REGISTRY,
   };
 }

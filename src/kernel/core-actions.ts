@@ -20,6 +20,8 @@ import { AicmsError } from "./errors.ts";
 import { catalog } from "../modules/catalog.ts";
 import type { SearchService } from "../modules/search.ts";
 import { installFromCatalog } from "./install.ts";
+import { loadRegistry } from "../registry.ts";
+import { join } from "node:path";
 import { moduleManifest } from "./modules.ts";
 import { allows, modelPermissions, type Actor } from "./policy.ts";
 import type { Kernel } from "./cms.ts";
@@ -369,9 +371,22 @@ export function coreActions(): RegisteredAction[] {
       schema: () => z.strictObject({}),
       async run(_input: Record<string, never>, { actor, kernel: k }) {
         const installed = new Set(k.modules.map((m) => m.name));
+        // Community modules from the registry are added in a terminal (aicms add), never installed by the server.
+        let community: unknown[] = [];
+        let registryError: string | undefined;
+        if (k.config.registry) {
+          try {
+            const reg = await loadRegistry(k.config.registry, { cacheFile: join(k.moduleDir("registry"), "cache.json") });
+            community = reg.modules.filter((m) => !m.official && !installed.has(m.name)).map((m) => ({ ...m, install: `aicms add ${m.name}` }));
+          } catch (e) {
+            registryError = e instanceof Error ? e.message : String(e);
+          }
+        }
         return {
           installed: k.modules.map(moduleManifest),
           available: catalog.filter((c) => !installed.has(c.name)).map((c) => ({ ...moduleManifest(c.create()), title: c.title, summary: c.summary })),
+          community,
+          ...(registryError ? { registryError } : {}),
           youCan: installer(actor) ? "install" : "propose",
         };
       },

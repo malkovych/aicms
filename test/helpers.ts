@@ -61,6 +61,7 @@ export async function makeCms(extra: Partial<Parameters<typeof createCMS>[0]> = 
     models: [post, tag],
     modules: [stats],
     public: ["post:read", "tag:read"],
+    registry: false,
     agents: {
       writer: { scopes: ["post:draft", "tag:draft"], review: "human" },
       tagger: { scopes: ["tag:draft"], review: "auto" },

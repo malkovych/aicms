@@ -117,6 +117,31 @@ export function Modules() {
               </motion.div>
             </>
           )}
+
+          {!!modules.community?.length && (
+            <>
+              <h2 className="section-title">{t("modules.community")} <span className="muted">{modules.community.length}</span></h2>
+              <p className="muted small">{t("modules.communityNote")}</p>
+              <motion.div className="module-grid" variants={list} initial="initial" animate="enter">
+                {modules.community.map((c) => (
+                  <motion.article key={c.name} className="plate module module-available" variants={item} layout>
+                    <header className="module-head">
+                      <span className="module-brick" aria-hidden="true"><Icon name="modules" size={18} /></span>
+                      <div className="min0">
+                        <h3>{c.title}</h3>
+                        <p className="muted small">{c.summary}</p>
+                        <p className="muted small">{t("modules.by", { author: c.author })} · {c.license} · <span className="mono">{c.package}</span></p>
+                      </div>
+                    </header>
+                    <ManifestView m={{ ...c, models: [], actions: [] }} />
+                    <footer className="row module-foot">
+                      <code className="muted small mono">{c.install}</code>
+                    </footer>
+                  </motion.article>
+                ))}
+              </motion.div>
+            </>
+          )}
         </>
       )}
     </div>

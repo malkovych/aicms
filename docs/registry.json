@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "updated": "2026-11-19",
+  "modules": [
+    {
+      "name": "seo",
+      "title": "SEO",
+      "summary": "Scores entries 0–100 with concrete fixes; serves sitemap.xml and robots.txt.",
+      "package": "aicms/modules",
+      "official": true,
+      "author": "AICMS",
+      "homepage": "https://github.com/malkovych/aicms/tree/main/src/modules",
+      "license": "MIT",
+      "provides": [
+        "seo"
+      ],
+      "requires": [],
+      "uses": [
+        "*"
+      ],
+      "scopes": [
+        "seo:audit"
+      ],
+      "routes": [
+        "GET /sitemap.xml",
+        "GET /robots.txt"
+      ],
+      "hooks": [],
+      "tags": [
+        "seo",
+        "sitemap",
+        "marketing"
+      ]
+    },
+    {
+      "name": "search",
+      "title": "Search",
+      "summary": "Ranked full-text search in any language; cms.search uses it automatically.",
+      "package": "aicms/modules",
+      "official": true,
+      "author": "AICMS",
+      "homepage": "https://github.com/malkovych/aicms/tree/main/src/modules",
+      "license": "MIT",
+      "provides": [
+        "search"
+      ],
+      "requires": [],
+      "uses": [
+        "*"
+      ],
+      "scopes": [
+        "search:admin"
+      ],
+      "routes": [],
+      "hooks": [
+        "changeset.merged"
+      ],
+      "tags": [
+        "search",
+        "full-text"
+      ]
+    },
+    {
+      "name": "media",
+      "title": "Media",
+      "summary": "Media library: uploads and URL imports, image sizes, alt text, served under /media.",
+      "package": "aicms/modules",
+      "official": true,
+      "author": "AICMS",
+      "homepage": "https://github.com/malkovych/aicms/tree/main/src/modules",
+      "license": "MIT",
+      "provides": [
+        "media"
+      ],
+      "requires": [],
+      "uses": [],
+      "scopes": [
+        "media:upload",
+        "media:read",
+        "media:update",
+        "media:delete"
+      ],
+      "routes": [
+        "POST /media/upload",
+        "GET /media/:id/:name"
+      ],
+      "hooks": [],
+      "tags": [
+        "images",
+        "uploads",
+        "files",
+        "alt text"
+      ]
+    },
+    {
+      "name": "i18n",
+      "title": "Translations",
+      "summary": "Links entries across locales, lists what's missing, drafts translations.",
+      "package": "aicms/modules",
+      "official": true,
+      "author": "AICMS",
+      "homepage": "https://github.com/malkovych/aicms/tree/main/src/modules",
+      "license": "MIT",
+      "provides": [
+        "i18n"
+      ],
+      "requires": [],
+      "uses": [
+        "*"
+      ],
+      "scopes": [
+        "i18n:translate"
+      ],
+      "routes": [],
+      "hooks": [
+        "changeset.merged"
+      ],
+      "tags": [
+        "translation",
+        "locales",
+        "languages"
+      ]
+    },
+    {
+      "name": "git-sync",
+      "title": "git-sync",
+      "summary": "Mirrors content to Markdown files and turns file edits into changesets.",
+      "package": "aicms/modules",
+      "official": true,
+      "author": "AICMS",
+      "homepage": "https://github.com/malkovych/aicms/tree/main/src/modules",
+      "license": "MIT",
+      "provides": [
+        "git-sync"
+      ],
+      "requires": [],
+      "uses": [
+        "*"
+      ],
+      "scopes": [
+        "git-sync:run"
+      ],
+      "routes": [],
+      "hooks": [
+        "changeset.merged"
+      ],
+      "tags": [
+        "git",
+        "markdown",
+        "files",
+        "pull requests"
+      ]
+    }
+  ]
+}

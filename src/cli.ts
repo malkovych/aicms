@@ -14,6 +14,7 @@ import { VERSION } from "./gates/discovery.ts";
 import { importFrom, loadProject } from "./load.ts";
 import { addModuleSource, listModuleCalls, removeModuleSource, type ModuleRef } from "./config-edit.ts";
 import { catalog, findCatalog } from "./modules/catalog.ts";
+import { DEFAULT_REGISTRY, exceedsDeclared, loadRegistry, searchRegistry, type RegistryEntry } from "./registry.ts";
 import { isModule, moduleManifest, type ModuleDef } from "./kernel/modules.ts";
 import { generateTypes } from "./typegen.ts";
 
@@ -36,6 +37,7 @@ Agents
 
 Modules
   modules                       Installed modules, their permissions, and official ones to add
+  search [query]                Find modules in the registry
   add <name|path|package>       Add a module: an official one (seo, search, media, i18n, git-sync),
                                 a local folder or an npm package; writes aicms.config.ts
   remove <name>                 Take a module out of aicms.config.ts
@@ -90,8 +92,18 @@ function printManifest(m: ReturnType<typeof moduleManifest>, indent = "  ") {
   line("hooks", m.hooks);
 }
 
-/** Resolve what `aicms add <target>` means: a catalog module, a local file/folder or an npm package. */
-async function resolveModule(root: string, configDir: string, target: string): Promise<{ ref: ModuleRef; def: ModuleDef; hint?: string }> {
+async function registryFor(root: string, url: string | false | undefined): Promise<RegistryEntry[]> {
+  if (url === false) return [];
+  try {
+    return (await loadRegistry(url ?? DEFAULT_REGISTRY, { cacheFile: join(root, ".aicms", "registry-cache.json") })).modules;
+  } catch (e) {
+    console.log(dim(`(registry unavailable: ${e instanceof Error ? e.message : e})`));
+    return [];
+  }
+}
+
+/** Resolve what `aicms add <target>` means: a catalog module, a local file/folder, a registry module or an npm package. */
+async function resolveModule(root: string, configDir: string, target: string, registry: string | false | undefined, force: boolean): Promise<{ ref: ModuleRef; def: ModuleDef; hint?: string }> {
   const entry = findCatalog(target);
   if (entry) {
     const def = entry.create();
@@ -105,9 +117,25 @@ async function resolveModule(root: string, configDir: string, target: string): P
     specifier = "./" + relative(configDir, file).split("\\").join("/");
     if (specifier.startsWith("./../")) specifier = specifier.slice(2);
   } else {
-    console.log(dim(`npm install ${target}`));
-    const r = spawnSync("npm", ["install", target], { cwd: root, stdio: "inherit", shell: process.platform === "win32" });
-    if (r.status !== 0) fail(`npm install ${target} failed`);
+    // A registry name maps to a reviewed npm package with declared permissions.
+    const listed = (await registryFor(root, registry)).find((m) => m.name === target && !m.official);
+    if (listed) {
+      specifier = listed.package;
+      console.log(`${bold(listed.title)} ${dim(`by ${listed.author} · ${listed.license}`)}\n  ${listed.summary}`);
+    }
+    console.log(dim(`npm install ${specifier}`));
+    const r = spawnSync("npm", ["install", specifier], { cwd: root, stdio: "inherit", shell: process.platform === "win32" });
+    if (r.status !== 0) fail(`npm install ${specifier} failed`);
+    if (listed) {
+      const loaded = await importFrom(configDir, specifier);
+      const def = isModule(loaded) ? loaded : typeof loaded === "function" ? (loaded as () => ModuleDef)() : null;
+      if (def && isModule(def)) {
+        const extra = exceedsDeclared(listed, moduleManifest(def));
+        if (extra.length && !force) {
+          fail(`${specifier} asks for more than its registry entry declares (${extra.join("; ")}). It was not added to aicms.config. Review it, then use --force to add it anyway.`);
+        }
+      }
+    }
   }
   const loaded = await importFrom(configDir, specifier.startsWith(".") ? resolve(configDir, specifier) : specifier);
   const def = isModule(loaded) ? loaded : typeof loaded === "function" ? (loaded as () => ModuleDef)() : null;
@@ -254,6 +282,7 @@ async function main() {
       url: { type: "string" },
       out: { type: "string", short: "o" },
       submit: { type: "boolean" },
+      force: { type: "boolean" },
       all: { type: "boolean" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -277,7 +306,7 @@ async function main() {
 
     if (cmd === "add") {
       if (!args[0]) fail(`Usage: aicms add <name|path|package>. Official modules: ${catalog.map((c) => c.name).join(", ")}`);
-      const { ref, def, hint: h } = await resolveModule(project.root, dirname(file), args[0]);
+      const { ref, def, hint: h } = await resolveModule(project.root, dirname(file), args[0], project.config.registry, !!values.force);
       if (installed.some((m) => m.name === def.name)) fail(`Module "${def.name}" is already in aicms.config`);
       // Lego: pull in official modules that provide what this one requires.
       const provided = new Set(installed.flatMap((m) => m.provides ?? []));
@@ -432,6 +461,20 @@ async function main() {
           console.log(`\n${bold("Official, not installed")}`);
           for (const m of res.available) console.log(`  ${bold(m.name.padEnd(9))} ${m.summary}  ${dim(`aicms add ${m.name}`)}`);
         }
+      }
+      break;
+    }
+
+    case "search": {
+      const reg = k.config.registry;
+      if (!reg) fail("The module registry is turned off (registry: false in aicms.config)");
+      const found = searchRegistry(await loadRegistry(reg, { cacheFile: join(k.projectDir, ".aicms", "registry-cache.json") }), args.join(" "));
+      const installed = new Set(k.modules.map((m) => m.name));
+      if (values.json) console.log(JSON.stringify(found, null, 2));
+      else if (!found.length) console.log(dim("No modules match."));
+      else for (const m of found) {
+        console.log(`${bold(m.name.padEnd(12))} ${m.summary}${installed.has(m.name) ? green("  installed") : ""}`);
+        console.log(dim(`${"".padEnd(12)} ${m.official ? "official" : `by ${m.author}`} · ${[m.provides.length ? `provides ${m.provides.join(", ")}` : "", m.scopes.length ? `scopes ${m.scopes.join(", ")}` : ""].filter(Boolean).join(" · ")}`));
       }
       break;
     }

@@ -181,9 +181,27 @@ export interface ModuleManifest {
   hooks: string[];
 }
 
+export interface CommunityModule {
+  name: string;
+  title: string;
+  summary: string;
+  package: string;
+  author: string;
+  license: string;
+  homepage?: string;
+  provides: string[];
+  requires: string[];
+  uses: string[];
+  scopes: string[];
+  routes: string[];
+  hooks: string[];
+  install: string;
+}
+
 interface ModulesInfo {
   installed: ModuleManifest[];
   available: ModuleManifest[];
+  community?: CommunityModule[];
   youCan: "install" | "propose";
 }
 
