@@ -12,6 +12,10 @@ const HEARTBEAT_MS = 25_000;
  */
 export function viewEvent(k: Kernel, actor: Actor, e: FeedEvent): FeedEvent | null {
   if (allows(actor.scopes, "events:read")) return e;
+  if (e.event === "presence") {
+    const m = k.models.get(e.payload?.model);
+    return m && actor.kind !== "public" && modelPermissions(actor, m).read ? e : null;
+  }
   if (e.event === "action" || !e.event.startsWith("changeset.")) return null;
   const p = e.payload ?? {};
   if (allows(actor.scopes, "changesets:review") || p.actor === actor.id) return e;

@@ -107,6 +107,8 @@ export async function draftEntry(
   cs.updatedAt = now();
   cs.issues = [];
   await k.store.saveChangeset(cs);
+  // People in Studio see an agent working on an entry as it happens.
+  if (actor.kind === "agent" && item.op === "update") k.presence.touch(actor, item.id, model.name, "editing");
 
   const result = item.op === "create" ? item.data ?? {} : applyPatch(before, item.data ?? {});
   return {
@@ -267,6 +269,8 @@ export async function submitChangeset(k: Kernel, actor: Actor, note?: string) {
   const reason = reviewReason(k, actor, cs);
   cs.issues = [];
   cs.comment = undefined;
+  // Submitting ends the work on these entries: the agent is no longer "editing" them.
+  for (const item of cs.items) if (item.op !== "install") k.presence.leave(actor, item.id);
   if (reason) {
     cs.status = "submitted";
     cs.reviewReason = reason;

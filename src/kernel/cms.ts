@@ -44,7 +44,25 @@ export interface Feed {
   subscribe(fn: (e: FeedEvent) => void): () => void;
 }
 
+export type PresenceState = "viewing" | "editing";
+
+export interface PresenceEntry {
+  actor: string;
+  kind: Actor["kind"];
+  state: PresenceState;
+  since: string;
+  seen: number;
+}
+
+/** Who is looking at or working on an entry right now (in this server process). */
+export interface Presence {
+  touch(actor: Actor, entry: string, model: string, state: PresenceState): void;
+  leave(actor: Actor, entry: string): void;
+  list(entry: string): Omit<PresenceEntry, "seen">[];
+}
+
 const FEED_SIZE = 500;
+const PRESENCE_TTL_MS = 45_000;
 const LOGIN_TTL_MS = 15 * 60_000;
 const SESSION_TTL_MS = 30 * 24 * 3_600_000;
 
@@ -85,6 +103,7 @@ export interface Kernel {
   on(event: string, handler: Handler): () => void;
   emit(event: string, payload: unknown): Promise<void>;
   readonly feed: Feed;
+  readonly presence: Presence;
   close(): Promise<void>;
 }
 
@@ -130,6 +149,45 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
       }
     }
   };
+  // ---- presence: entry → actor → state; expires without a heartbeat ----
+  const here = new Map<string, Map<string, PresenceEntry & { model: string }>>();
+  const announce = (entry: string, model: string) =>
+    publish("presence", { entry, model, here: [...(here.get(entry)?.values() ?? [])].map(({ seen: _s, model: _m, ...p }) => p) });
+  const sweep = () => {
+    const cutoff = Date.now() - PRESENCE_TTL_MS;
+    for (const [entry, actors] of here) {
+      let model = "";
+      let changed = false;
+      for (const [id, p] of actors) if (p.seen < cutoff) { model = p.model; actors.delete(id); changed = true; }
+      if (!actors.size) here.delete(entry);
+      if (changed) announce(entry, model);
+    }
+  };
+  const sweeper = setInterval(sweep, 15_000);
+  sweeper.unref?.();
+  const presence: Presence = {
+    touch(actor, entry, model, state) {
+      if (actor.kind === "public") return;
+      const actors = here.get(entry) ?? new Map();
+      const prev = actors.get(actor.id);
+      actors.set(actor.id, { actor: actor.id, kind: actor.kind, state, since: prev?.state === state ? prev.since : new Date().toISOString(), seen: Date.now(), model });
+      here.set(entry, actors);
+      if (!prev || prev.state !== state) announce(entry, model);
+    },
+    leave(actor, entry) {
+      const actors = here.get(entry);
+      const prev = actors?.get(actor.id);
+      if (!actors || !prev) return;
+      actors.delete(actor.id);
+      if (!actors.size) here.delete(entry);
+      announce(entry, prev.model);
+    },
+    list(entry) {
+      sweep();
+      return [...(here.get(entry)?.values() ?? [])].map(({ seen: _s, model: _m, ...p }) => p);
+    },
+  };
+
   const feed: Feed = {
     since: (id = 0) => buffer.filter((e) => e.id > id),
     lastId: () => seq,
@@ -221,7 +279,8 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
         throw e;
       } finally {
         // Anonymous reads and Studio's own page loads would flood the log; everything else is recorded.
-        const quiet = !error && (actor.kind === "public" || (gate === "studio" && action?.readOnly));
+        // Presence heartbeats are ephemeral and frequent: never logged, never counted against a budget.
+        const quiet = !error && (actor.kind === "public" || name === "cms.presence" || (gate === "studio" && action?.readOnly));
         if (!quiet) {
           let logged: string | undefined;
           try {
@@ -335,7 +394,11 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
     },
 
     feed,
-    close: () => store.close(),
+    presence,
+    close: async () => {
+      clearInterval(sweeper);
+      await store.close();
+    },
   };
 
   function checkRefs() {

@@ -1,8 +1,8 @@
 import { blocksToHtml } from "@aicms/client";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { markdownToBlocks } from "../../../src/schema/markdown.ts";
-import { AicmsClientError, cms, errorMessage, humanize, titleField, useApi, useLive, useModel, useModules, useSite, type FieldInfo, type ModelInfo } from "../api.tsx";
+import { AicmsClientError, cms, errorMessage, humanize, isChangesetEvent, titleField, useApi, useLive, useLiveEach, useModel, useModules, useSite, type FieldInfo, type ModelInfo } from "../api.tsx";
 import { MediaPicker, uploadFiles } from "./Media.tsx";
 import { show } from "../diff.tsx";
 import { useT } from "../i18n.tsx";
@@ -241,6 +241,8 @@ export function EntryEditor({ model, id }: { model: string; id?: string }) {
           </div>
         )}
       </header>
+
+      {id && !missing && <PresenceBar id={id} editing={dirty} />}
 
       <div className="editor">
         <div className="editor-main">
@@ -675,5 +677,78 @@ function TranslationsPanel({ model, id, version }: { model: string; id: string; 
         })}
       </ul>
     </section>
+  );
+}
+
+// ---------- presence ----------
+
+interface Here { actor: string; kind: string; state: "viewing" | "editing"; since: string }
+interface DraftInfo { actor: string; changeset: string; status: string; op: string; fields: string[]; mine: boolean }
+
+/** Announce ourselves on an entry, and show who else is here and whose drafts would conflict. */
+function usePresence(id: string, editing: boolean) {
+  const { site } = useSite();
+  const [state, setState] = useState<{ here: Here[]; drafts: DraftInfo[] } | null>(null);
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const beat = useCallback(
+    (s?: "viewing" | "editing") => cms.call<{ here: Here[]; drafts: DraftInfo[] }>("cms.presence", { id, ...(s ? { state: s } : {}) }).then(setState, () => {}),
+    [id],
+  );
+  // Join, keep a heartbeat, leave on the way out.
+  useEffect(() => {
+    beat(editingRef.current ? "editing" : "viewing");
+    const timer = setInterval(() => beat(editingRef.current ? "editing" : "viewing"), 20_000);
+    return () => {
+      clearInterval(timer);
+      fetch("/api/v1/actions/cms.presence", { method: "POST", keepalive: true, credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, state: "left" }) }).catch(() => {});
+    };
+  }, [id, beat]);
+  useEffect(() => {
+    beat(editing ? "editing" : "viewing");
+  }, [editing, beat]);
+  useLiveEach(
+    (e) => e.event === "presence" && e.payload?.entry === id,
+    (e) => {
+      setState((s) => (s ? { ...s, here: (e.payload.here as Here[]).filter((p) => p.actor !== site.you.name) } : s));
+      beat(); // an agent starting to edit usually means a new draft: refresh those too
+    },
+  );
+  useLive(isChangesetEvent, () => beat());
+  return state;
+}
+
+function PresenceBar({ id, editing }: { id: string; editing: boolean }) {
+  const { t } = useT();
+  const p = usePresence(id, editing);
+  if (!p) return null;
+  const others = p.drafts.filter((d) => !d.mine);
+  const editors = p.here.filter((h) => h.state === "editing");
+  if (!p.here.length && !others.length) return null;
+  return (
+    <AnimatePresence>
+      <motion.div className="presence" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+        {!!p.here.length && (
+          <div className="presence-people">
+            {p.here.map((h) => (
+              <span key={h.actor} className={`presence-person ${h.state}`} title={`${h.actor} · ${t(`presence.${h.state}`)}`}>
+                <Avatar name={h.actor} size={26} />
+                <span className="presence-label">{h.actor} <span className="muted">{t(`presence.${h.state}`)}</span></span>
+              </span>
+            ))}
+          </div>
+        )}
+        {editors.length > 0 && <div className="notice notice-mod"><Icon name="alert" /><div>{t("presence.editingNow", { who: editors.map((e) => e.actor).join(", ") })}</div></div>}
+        {others.map((d) => (
+          <div key={d.changeset} className="notice notice-mod">
+            <Icon name="history" />
+            <div>
+              {t(d.status === "waiting for review" ? "presence.draftWaiting" : "presence.draftOpen", { who: d.actor, fields: d.fields.map(humanize).join(", ") || d.op })}
+              {d.status === "waiting for review" && <> <Link to={`/inbox/${d.changeset}`}>{t("presence.open")}</Link></>}
+            </div>
+          </div>
+        ))}
+      </motion.div>
+    </AnimatePresence>
   );
 }

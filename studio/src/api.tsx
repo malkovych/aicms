@@ -65,7 +65,7 @@ export function useApi<T>(fn: () => Promise<T>, deps: unknown[]) {
 
 type Listener = (e: FeedEvent) => void;
 const LiveContext = createContext<{ connected: boolean; subscribe(fn: Listener): () => void }>({ connected: false, subscribe: () => () => {} });
-const EVENTS = ["action", "changeset.submitted", "changeset.merged", "changeset.rejected"];
+const EVENTS = ["action", "presence", "changeset.submitted", "changeset.merged", "changeset.rejected"];
 
 export function LiveProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);

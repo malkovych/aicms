@@ -343,6 +343,25 @@ export function coreActions(): RegisteredAction[] {
       },
     },
     {
+      name: "cms.presence",
+      description: "Who is looking at or editing an entry right now, plus unpublished drafts of it (yours or others', e.g. waiting for review). Pass state to announce yourself: viewing, editing or left.",
+      visible: signedIn,
+      schema: () => z.strictObject({ id: z.string().min(1), state: z.enum(["viewing", "editing", "left"]).optional() }),
+      async run(input: { id: string; state?: "viewing" | "editing" | "left" }, { actor, kernel: k }) {
+        const entry = await k.store.getEntry(input.id);
+        const model = entry ? k.models.get(entry.model) : undefined;
+        if (!entry || !model || !modelPermissions(actor, model).read) throw new AicmsError("not_found", `No entry ${input.id}`);
+        if (input.state === "left") k.presence.leave(actor, input.id);
+        else if (input.state) k.presence.touch(actor, input.id, model.name, input.state);
+        const drafts = [];
+        for (const cs of await k.store.listChangesets({ status: ["open", "submitted"], limit: 1000 })) {
+          const item = cs.items.find((i) => i.id === input.id && i.op !== "install");
+          if (item) drafts.push({ actor: cs.actor, changeset: cs.id, status: cs.status === "submitted" ? "waiting for review" : "drafting", op: item.op, fields: Object.keys(item.data ?? {}), mine: cs.actor === actor.id });
+        }
+        return { id: input.id, model: model.name, version: entry.version, here: k.presence.list(input.id).filter((p) => p.actor !== actor.id), drafts };
+      },
+    },
+    {
       name: "cms.modules",
       description: "Installed modules and what each may do (models, Actions, scopes, routes, hooks), plus official modules that can be installed. Propose one with cms_propose_module.",
       readOnly: true,

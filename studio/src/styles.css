@@ -419,6 +419,16 @@ select.input { cursor: pointer; }
   .media-actions { position: static; justify-content: flex-end; }
 }
 
+/* ---------- presence ---------- */
+.presence { display: flex; flex-direction: column; gap: 10px; margin: -8px 0 18px; }
+.presence-people { display: flex; flex-wrap: wrap; gap: 8px; }
+.presence-person { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 99px; background: var(--plate); border: 1px solid var(--line-soft); font-size: 13px; font-weight: 600; max-width: 100%; }
+.presence-person.editing { border-color: var(--mod); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mod) 20%, transparent); }
+.presence-person.editing .avatar { animation: breathe 2.2s ease-in-out infinite; }
+.presence-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.presence .notice a { color: inherit; font-weight: 700; }
+@keyframes breathe { 50% { transform: scale(0.92); } }
+
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
   .split { grid-template-columns: minmax(0, 1fr); }
