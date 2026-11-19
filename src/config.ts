@@ -2,6 +2,7 @@ import type { Model } from "./schema/model.ts";
 import type { ModuleDef } from "./kernel/modules.ts";
 import type { Budget, ReviewMode } from "./kernel/policy.ts";
 import type { SqliteOptions } from "./store/sqlite.ts";
+import type { PostgresOptions } from "./store/postgres.ts";
 
 export interface AgentConfig {
   /** e.g. ["post:draft", "tag:read", "post:update.seo"] */
@@ -23,7 +24,8 @@ export interface WebhookConfig {
 export interface Config {
   /** Shown to agents in cms_describe and llms.txt. */
   name?: string;
-  db?: SqliteOptions;
+  /** sqlite(".aicms/data.db") (default) or postgres({ url }). */
+  db?: SqliteOptions | PostgresOptions;
   /** The first locale is the default. */
   locales?: string[];
   /** Defaults to every model in ./models when loaded through the CLI. */
@@ -37,7 +39,7 @@ export interface Config {
 
 export interface ResolvedConfig {
   name: string;
-  db: SqliteOptions;
+  db: SqliteOptions | PostgresOptions;
   locales: string[];
   models: Model[];
   modules: ModuleDef[];

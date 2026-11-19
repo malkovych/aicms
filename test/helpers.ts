@@ -1,4 +1,4 @@
-import { action, createCMS, defineModel, defineModule, field, sqlite } from "../src/index.ts";
+import { action, createCMS, defineModel, defineModule, field, PostgresStore, pgliteDriver, sqlite, type SqlDriver } from "../src/index.ts";
 
 export const tag = defineModel({
   name: "tag",
@@ -39,7 +39,21 @@ export const stats = defineModule({
   },
 });
 
+/**
+ * AICMS_TEST_DB=pglite runs every test against Postgres (PGlite, in-process).
+ * One database per test process; each test starts from an empty schema.
+ */
+let shared: Promise<SqlDriver> | undefined;
+async function testStore() {
+  if (process.env.AICMS_TEST_DB !== "pglite") return undefined;
+  shared ??= import("@electric-sql/pglite").then(({ PGlite }) => pgliteDriver(new PGlite()));
+  const driver = await shared;
+  await driver.exec("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+  return new PostgresStore({ ...driver, close: async () => {} });
+}
+
 export async function makeCms(extra: Partial<Parameters<typeof createCMS>[0]> = {}, opts: Parameters<typeof createCMS>[1] = {}) {
+  const store = opts.store ?? (await testStore());
   return createCMS({
     name: "Test site",
     db: sqlite(":memory:"),
@@ -55,5 +69,5 @@ export async function makeCms(extra: Partial<Parameters<typeof createCMS>[0]> = 
       tiny: { scopes: ["tag:draft"], review: "auto", budget: { actionsPerHour: 3 } },
     },
     ...extra,
-  }, opts);
+  }, { ...opts, ...(store ? { store } : {}) });
 }

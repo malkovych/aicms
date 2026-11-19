@@ -19,6 +19,16 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+  postgres:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:pg
   python:
     runs-on: ubuntu-latest
     strategy:

@@ -12,6 +12,7 @@ export { createCMS, type Kernel, type ToolInfo, type CreateOptions, type FeedEve
 export { AicmsError, type ErrorCode } from "./kernel/errors.ts";
 export { allows, type Actor, type ReviewMode, type Budget } from "./kernel/policy.ts";
 export { sqlite, SqliteStore } from "./store/sqlite.ts";
+export { postgres, PostgresStore, pgDriver, pgliteDriver, type PostgresOptions, type SqlDriver } from "./store/postgres.ts";
 export type { Store, EntryRow, ChangesetRow, ChangesetItem, CheckIssue } from "./store/types.ts";
 export { createApp, type AppOptions } from "./gates/rest.ts";
 export { generateTypes } from "./typegen.ts";

@@ -5,6 +5,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { resolveConfig, type Config, type ResolvedConfig } from "../config.ts";
 import { indexedFields, isModel, toJsonSchema, type Model } from "../schema/model.ts";
 import { SqliteStore } from "../store/sqlite.ts";
+import { openPostgres } from "../store/postgres.ts";
 import type { Store } from "../store/types.ts";
 import { toolName, type Gate, type RegisteredAction } from "./action.ts";
 import { newId, rejectChangeset } from "./changesets.ts";
@@ -103,9 +104,10 @@ export interface CreateOptions {
 export async function createCMS(input: Config, opts: CreateOptions = {}): Promise<Kernel> {
   const config = resolveConfig(input);
   const cwd = opts.cwd ?? process.cwd();
-  const dbPath = config.db.path === ":memory:" || isAbsolute(config.db.path) ? config.db.path : resolve(cwd, config.db.path);
-  const store = opts.store ?? new SqliteStore(dbPath);
-  const dataDir = opts.dataDir ?? (dbPath === ":memory:" ? join(tmpdir(), `aicms-${process.pid}`) : dirname(dbPath));
+  const db = config.db;
+  const dbPath = db.kind === "sqlite" ? (db.path === ":memory:" || isAbsolute(db.path) ? db.path : resolve(cwd, db.path)) : null;
+  const store = opts.store ?? (db.kind === "postgres" ? await openPostgres(db) : new SqliteStore(dbPath!));
+  const dataDir = opts.dataDir ?? (dbPath && dbPath !== ":memory:" ? dirname(dbPath) : db.kind === "postgres" ? resolve(cwd, ".aicms") : join(tmpdir(), `aicms-${process.pid}`));
   const modules: ModuleDef[] = [];
   const services = new Map<string, unknown>();
   const routes: ModuleRoute[] = [];
