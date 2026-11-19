@@ -92,6 +92,13 @@ export interface ModuleContext {
   service<T = unknown>(capability: string): T | undefined;
   /** A platform binding (Cloudflare env), e.g. an R2 bucket. */
   binding<T = unknown>(name: string): T;
+  /** Publish an event to other modules' `on` handlers, webhooks and the live feed, e.g. "payment.updated". */
+  emit(event: string, payload: unknown): Promise<void>;
+  /**
+   * The same context acting as the module itself (`module:<name>`), for data the module owns,
+   * such as orders: written and versioned at once, without waiting for review.
+   */
+  asSystem(): ModuleContext;
   kv: ModuleStorage;
   /** Low-level storage for search and media providers. */
   text: {
@@ -172,6 +179,11 @@ export function moduleContext(k: Kernel, mod: ModuleDef, actor: Actor, gate: Gat
     },
     service: (cap) => k.service(cap),
     binding: (name) => k.binding(name),
+    emit: (event, payload) => {
+      if (event.startsWith("changeset.") || event === "action" || event === "presence") throw new AicmsError("invalid", `Modules can't emit "${event}"`);
+      return k.emit(event, payload);
+    },
+    asSystem: () => moduleContext(k, mod, { id: `module:${mod.name}`, kind: "system", scopes: ["*"], review: "auto" }, "internal"),
     kv: {
       get: (key) => s.kvGet(mod.name, key) as Promise<any>,
       set: (key, value) => s.kvSet(mod.name, key, value),

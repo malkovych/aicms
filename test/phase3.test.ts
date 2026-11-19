@@ -126,3 +126,86 @@ test("A2A: Agent Card per caller, message/send runs a skill, tasks/get, honest e
   assert.equal(log.events[0].gate, "a2a");
   await k.close();
 });
+
+test("commerce + manual payments: server-side prices, stock, statuses, order lookup", async () => {
+  const { createApp } = await import("../src/index.ts");
+  const { commerce, manualPayments } = await import("../src/modules/index.ts");
+  const k = await makeCms({ modules: [commerce({ currency: "EUR" }), manualPayments({ instructions: "IBAN UA00 0000" })], agents: { shop: { scopes: ["commerce:orders", "commerce:manage", "product:draft"] } } });
+  const app = createApp(k, { studio: false });
+  const p: any = await k.call("product.draft", { title: "Winter cream", sku: "WC-50", price: 1250, stock: 3, active: true }, owner);
+  await k.call("product.draft", { title: "Old cream", price: 900, active: false }, owner);
+  await k.call("cms.submit", {}, owner);
+  const checkout = (body: unknown) => app.request("/commerce/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  const res = await checkout({ items: [{ product: "WC-50", quantity: 2 }], customer: { name: "Olena", email: "olena@example.com" } });
+  assert.equal(res.status, 201);
+  const order: any = await res.json();
+  assert.deepEqual([order.status, order.total, order.currency, order.instructions], ["pending", 2500, "EUR", "IBAN UA00 0000"]);
+  assert.equal((await checkout({ items: [{ product: p.id, quantity: 1, price: 1 }], customer: { email: "x@example.com" } })).status, 422, "clients can't send prices");
+  assert.equal((await checkout({ items: [{ product: "WC-50", quantity: 5 }], customer: { email: "x@example.com" } })).status, 409, "out of stock");
+  const inactive: any = await (await checkout({ items: [{ product: "old-cream", quantity: 1 }], customer: { email: "x@example.com" } })).json();
+  assert.equal(inactive.error.code, "not_found");
+
+  const status = await (await app.request(`/commerce/orders/${order.order}?key=${order.key}`)).json() as any;
+  assert.equal(status.status, "pending");
+  assert.equal((await app.request(`/commerce/orders/${order.order}?key=wrong`)).status, 404);
+
+  const shop = { actor: k.actor("shop"), gate: "mcp" as const };
+  await assert.rejects(k.call("commerce.set_status", { number: order.order, status: "fulfilled" }, shop), /can't go from pending to fulfilled/);
+  const paid: any = await k.call("commerce.set_status", { number: order.order, status: "paid", note: "Transfer arrived" }, shop);
+  assert.equal(paid.status, "paid");
+  assert.equal(((await k.call("product.get", { id: p.id }, owner)) as any).stock, 1, "paid orders take stock");
+  await k.call("commerce.set_status", { number: order.order, status: "fulfilled" }, shop);
+  const refunded: any = await k.call("commerce.set_status", { number: order.order, status: "refunded" }, shop);
+  assert.deepEqual(refunded.history.map((h: any) => [h.status, h.by]), [["pending", "customer"], ["paid", "shop"], ["fulfilled", "shop"], ["refunded", "shop"]]);
+  assert.equal(refunded.history[3].note, "Refunded outside AICMS");
+  const orders: any = await k.call("commerce.orders", {}, shop);
+  assert.equal(orders.orders[0].status, "refunded");
+  await assert.rejects(k.call("order.draft", { number: "X", status: "paid", items: [], total: 0, currency: "EUR" }, shop), /may not call|can't create/, "agents never write orders directly");
+  const versions: any = await k.call("cms.history", { id: (await k.call("commerce.order", { number: order.order }, shop) as any).id }, owner);
+  assert.ok(versions.versions.length >= 4, "every status change is a version");
+  await k.close();
+});
+
+test("stripe: checkout session with server price, signed webhook pays, refunds through Stripe", async () => {
+  const { createHmac } = await import("node:crypto");
+  const { createApp } = await import("../src/index.ts");
+  const { commerce, stripe, verifyStripeSignature } = await import("../src/modules/index.ts");
+  const calls: { path: string; form: URLSearchParams; idem: string | null }[] = [];
+  const fakeStripe = (async (url: string, init: RequestInit) => {
+    const path = new URL(url).pathname;
+    calls.push({ path, form: new URLSearchParams(String(init.body)), idem: new Headers(init.headers).get("idempotency-key") });
+    if (path === "/v1/checkout/sessions") return Response.json({ id: "cs_test_1", url: "https://checkout.stripe.com/c/pay/cs_test_1", payment_status: "unpaid" });
+    if (path === "/v1/refunds") return Response.json({ id: "re_1", status: "succeeded" });
+    return Response.json({ error: { message: "unknown" } }, { status: 404 });
+  }) as unknown as typeof fetch;
+  const k = await makeCms({ modules: [commerce({ currency: "usd", successUrl: "https://shop.test/thanks", cancelUrl: "https://shop.test/cart" }), stripe({ secretKey: "sk_test_x", webhookSecret: "whsec_test", fetch: fakeStripe })] });
+  const app = createApp(k, { studio: false });
+  await k.call("product.draft", { title: "Sunscreen", sku: "SPF50", price: 1999, active: true }, owner);
+  await k.call("cms.submit", {}, owner);
+
+  const order: any = await (await app.request("/commerce/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items: [{ product: "SPF50", quantity: 3 }], customer: { email: "buyer@example.com" } }) })).json();
+  assert.equal(order.paymentUrl, "https://checkout.stripe.com/c/pay/cs_test_1");
+  assert.equal(calls[0].form.get("line_items[0][price_data][unit_amount]"), "5997");
+  assert.equal(calls[0].form.get("line_items[0][price_data][currency]"), "usd");
+  assert.equal(calls[0].idem, `aicms-order-${order.order}`);
+
+  const sign = (payload: string, t = Math.floor(Date.now() / 1000)) => `t=${t},v1=${createHmac("sha256", "whsec_test").update(`${t}.${payload}`).digest("hex")}`;
+  const hook = (payload: string, sig: string) => app.request("/payments/stripe/webhook", { method: "POST", headers: { "stripe-signature": sig }, body: payload });
+  const completed = JSON.stringify({ type: "checkout.session.completed", data: { object: { id: "cs_test_1", payment_status: "paid", payment_intent: "pi_123" } } });
+  assert.equal((await hook(completed, "t=1,v1=00")).status, 400, "unsigned webhooks are refused");
+  assert.equal((await hook(completed, sign(completed, Math.floor(Date.now() / 1000) - 3600))).status, 400, "old signatures are refused");
+  assert.equal((await hook(completed, sign(completed))).status, 200);
+  const paid: any = await k.call("commerce.order", { number: order.order }, owner);
+  assert.equal(paid.status, "paid");
+  assert.equal(paid.payment.intent, "pi_123");
+
+  await k.call("commerce.set_status", { number: order.order, status: "refunded" }, owner);
+  assert.equal(calls.at(-1)!.path, "/v1/refunds");
+  assert.equal(calls.at(-1)!.form.get("payment_intent"), "pi_123");
+  const refundedEvent = JSON.stringify({ type: "charge.refunded", data: { object: { payment_intent: "pi_123" } } });
+  assert.equal((await hook(refundedEvent, sign(refundedEvent))).status, 200, "a late refund event is harmless");
+  assert.equal(((await k.call("commerce.order", { number: order.order }, owner)) as any).status, "refunded");
+  assert.equal(verifyStripeSignature("x", sign("x"), "whsec_other"), false);
+  await k.close();
+});

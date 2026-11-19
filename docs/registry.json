@@ -150,6 +150,85 @@
         "files",
         "pull requests"
       ]
+    },
+    {
+      "name": "commerce",
+      "title": "Commerce",
+      "summary": "Products, orders and checkout with server-side prices; needs a payments provider.",
+      "package": "aicms/modules",
+      "official": true,
+      "author": "AICMS",
+      "homepage": "https://github.com/malkovych/aicms/tree/main/src/modules",
+      "license": "MIT",
+      "provides": [
+        "commerce"
+      ],
+      "requires": [
+        "payments"
+      ],
+      "uses": [],
+      "scopes": [
+        "commerce:orders",
+        "commerce:manage"
+      ],
+      "routes": [
+        "POST /commerce/checkout",
+        "GET /commerce/orders/:number"
+      ],
+      "hooks": [
+        "payment.updated"
+      ],
+      "tags": [
+        "shop",
+        "products",
+        "orders"
+      ]
+    },
+    {
+      "name": "manual-payments",
+      "title": "Manual payments",
+      "summary": "Bank transfer or cash on delivery: orders wait until a person marks them paid.",
+      "package": "aicms/modules",
+      "official": true,
+      "author": "AICMS",
+      "homepage": "https://github.com/malkovych/aicms/tree/main/src/modules",
+      "license": "MIT",
+      "provides": [
+        "payments"
+      ],
+      "requires": [],
+      "uses": [],
+      "scopes": [],
+      "routes": [],
+      "hooks": [],
+      "tags": [
+        "payments",
+        "bank transfer"
+      ]
+    },
+    {
+      "name": "stripe",
+      "title": "Stripe",
+      "summary": "Stripe Checkout pages, signed webhooks and refunds.",
+      "package": "aicms/modules",
+      "official": true,
+      "author": "AICMS",
+      "homepage": "https://github.com/malkovych/aicms/tree/main/src/modules",
+      "license": "MIT",
+      "provides": [
+        "payments"
+      ],
+      "requires": [],
+      "uses": [],
+      "scopes": [],
+      "routes": [
+        "POST /payments/stripe/webhook"
+      ],
+      "hooks": [],
+      "tags": [
+        "payments",
+        "checkout"
+      ]
     }
   ]
 }
