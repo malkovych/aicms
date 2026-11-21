@@ -7,7 +7,7 @@ import { MediaPicker, uploadFiles } from "./Media.tsx";
 import { show } from "../diff.tsx";
 import { useT } from "../i18n.tsx";
 import { Link, navigate } from "../router.tsx";
-import { Avatar, Button, Empty, ErrorBox, Icon, item, list, Modal, Pill, Skeleton, TimeAgo, useToast } from "../ui.tsx";
+import { Avatar, Button, Empty, ErrorBox, formatWhen, Icon, item, list, Modal, Pill, Skeleton, TimeAgo, toLocalInput, tomorrowMorning, useToast } from "../ui.tsx";
 
 type Data = Record<string, unknown>;
 interface EntryRow extends Data { id: string; locale: string; version: number; updatedAt: string }
@@ -138,7 +138,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stri
 // ---------- editor ----------
 
 export function EntryEditor({ model, id }: { model: string; id?: string }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const toast = useToast();
   const { site, reload: reloadSite } = useSite();
   const info = useModel(model);
@@ -150,6 +150,8 @@ export function EntryEditor({ model, id }: { model: string; id?: string }) {
   const [busy, setBusy] = useState<"publish" | "delete" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+  const [when, setWhen] = useState(() => toLocalInput(tomorrowMorning()));
 
   const fields = useMemo(() => info.data?.fields ?? [], [info.data]);
   const original = useMemo(() => {
@@ -166,7 +168,7 @@ export function EntryEditor({ model, id }: { model: string; id?: string }) {
   const titleKey = titleField(info.data);
   const heading = (titleKey && (values[titleKey] as string)) || (id ? t("content.untitled") : t("entry.new", { model: info.data?.label ?? model }));
 
-  const publish = async () => {
+  const publish = async (at?: string) => {
     setErrors({});
     const patch: Data = {};
     try {
@@ -183,14 +185,17 @@ export function EntryEditor({ model, id }: { model: string; id?: string }) {
     setBusy("publish");
     try {
       const draft = await cms.model(model).draft({ ...(id ? { id } : { locale }), ...patch });
-      const res = await cms.submit();
+      const res = await cms.submit(at ? { publishAt: at } : undefined);
       if (res.status === "needs_changes") {
         // Keep the owner's changeset clean: drop the broken draft, show the issues in the form.
         await cms.discard(draft.id).catch(() => {});
         setErrors(Object.fromEntries((res.issues ?? []).map((i) => [i.field?.split(".")[0] ?? "_", i.message])));
         return;
       }
-      toast(id ? t("entry.published") : t("entry.created"));
+      setScheduling(false);
+      if (res.status === "scheduled") toast(t("entry.scheduled", { when: formatWhen(res.publishAt!, lang) }), "core");
+      else if (res.warnings?.length) toast(t("entry.warnings", { n: res.warnings.length, first: res.warnings[0].message }), "core");
+      else toast(id ? t("entry.published") : t("entry.created"));
       reloadSite();
       if (id) {
         entry.reload();
@@ -237,7 +242,18 @@ export function EntryEditor({ model, id }: { model: string; id?: string }) {
         {!missing && (
           <div className="row">
             <AnimatePresence>{dirty && <motion.span className="dirty" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>{t("entry.dirty")}</motion.span>}</AnimatePresence>
-            <Button tone="primary" icon="check" busy={busy === "publish"} disabled={!dirty && !!id} onClick={publish}>{busy === "publish" ? t("entry.publishing") : t("entry.publish")}</Button>
+            <div className="schedule-wrap">
+              <Button icon="clock" disabled={(!dirty && !!id) || busy === "publish"} onClick={() => setScheduling((x) => !x)} aria-expanded={scheduling}>{t("entry.schedule")}</Button>
+              <AnimatePresence>
+                {scheduling && (
+                  <motion.div className="schedule-pop plate" initial={{ opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4 }} transition={{ type: "spring", stiffness: 480, damping: 34 }}>
+                    <input className="input" type="datetime-local" value={when} min={toLocalInput(new Date())} onChange={(e) => setWhen(e.target.value)} autoFocus />
+                    <Button tone="primary" icon="clock" busy={busy === "publish"} disabled={!when || Date.parse(when) <= Date.now()} onClick={() => publish(new Date(when).toISOString())}>{t("entry.scheduleConfirm")}</Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            <Button tone="primary" icon="check" busy={busy === "publish"} disabled={!dirty && !!id} onClick={() => publish()}>{busy === "publish" ? t("entry.publishing") : t("entry.publish")}</Button>
           </div>
         )}
       </header>
@@ -683,7 +699,7 @@ function TranslationsPanel({ model, id, version }: { model: string; id: string; 
 // ---------- presence ----------
 
 interface Here { actor: string; kind: string; state: "viewing" | "editing"; since: string }
-interface DraftInfo { actor: string; changeset: string; status: string; op: string; fields: string[]; mine: boolean }
+interface DraftInfo { actor: string; changeset: string; status: string; publishAt?: string; op: string; fields: string[]; mine: boolean }
 
 /** Announce ourselves on an entry, and show who else is here and whose drafts would conflict. */
 function usePresence(id: string, editing: boolean) {
@@ -719,10 +735,11 @@ function usePresence(id: string, editing: boolean) {
 }
 
 function PresenceBar({ id, editing }: { id: string; editing: boolean }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const p = usePresence(id, editing);
   if (!p) return null;
-  const others = p.drafts.filter((d) => !d.mine);
+  // Your own scheduled changes show too: they are what this entry becomes later.
+  const others = p.drafts.filter((d) => !d.mine || d.status === "scheduled");
   const editors = p.here.filter((h) => h.state === "editing");
   if (!p.here.length && !others.length) return null;
   return (
@@ -740,11 +757,13 @@ function PresenceBar({ id, editing }: { id: string; editing: boolean }) {
         )}
         {editors.length > 0 && <div className="notice notice-mod"><Icon name="alert" /><div>{t("presence.editingNow", { who: editors.map((e) => e.actor).join(", ") })}</div></div>}
         {others.map((d) => (
-          <div key={d.changeset} className="notice notice-mod">
-            <Icon name="history" />
+          <div key={d.changeset} className={`notice ${d.status === "scheduled" ? "notice-core" : "notice-mod"}`}>
+            <Icon name={d.status === "scheduled" ? "clock" : "history"} />
             <div>
-              {t(d.status === "waiting for review" ? "presence.draftWaiting" : "presence.draftOpen", { who: d.actor, fields: d.fields.map(humanize).join(", ") || d.op })}
-              {d.status === "waiting for review" && <> <Link to={`/inbox/${d.changeset}`}>{t("presence.open")}</Link></>}
+              {d.status === "scheduled" && d.publishAt ? (
+                t(d.mine ? "presence.draftScheduledMine" : "presence.draftScheduled", { who: d.actor, fields: d.fields.map(humanize).join(", ") || d.op, when: formatWhen(d.publishAt, lang) })
+              ) : t(d.status === "waiting for review" ? "presence.draftWaiting" : "presence.draftOpen", { who: d.actor, fields: d.fields.map(humanize).join(", ") || d.op })}
+              {(d.status === "waiting for review" || d.status === "scheduled") && <> <Link to={`/inbox/${d.changeset}`}>{t("presence.open")}</Link></>}
             </div>
           </div>
         ))}

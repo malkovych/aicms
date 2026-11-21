@@ -121,7 +121,7 @@ export interface ModuleContext {
   readable(model: string): boolean;
   /** May anyone, without a token, read this model? */
   isPublic(model: string): boolean;
-  /** An unpublished draft of this entry in anyone's open or submitted changeset (e.g. waiting for review). */
+  /** An unpublished draft of this entry in anyone's open, submitted or scheduled changeset (e.g. waiting for review). */
   pending(id: string): Promise<{ changeset: string; actor: string; status: string; op: string; data: Record<string, unknown> } | null>;
   /** The implementation of a capability another module provides. */
   service<T = unknown>(capability: string): T | undefined;
@@ -206,7 +206,7 @@ export function moduleContext(k: Kernel, mod: ModuleDef, actor: Actor, gate: Gat
     },
     isPublic: (name) => allows(k.config.public, `${name}:read`),
     async pending(id) {
-      for (const cs of await s.listChangesets({ status: ["submitted", "open"], limit: 1000 })) {
+      for (const cs of await s.listChangesets({ status: ["submitted", "scheduled", "open"], limit: 1000 })) {
         const item = cs.items.find((i) => i.id === id && i.op !== "install");
         if (item) return { changeset: cs.id, actor: cs.actor, status: cs.status, op: item.op, data: item.data ?? {} };
       }

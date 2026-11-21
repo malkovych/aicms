@@ -9,7 +9,7 @@ interface Agent {
   name: string;
   description?: string;
   scopes: string[];
-  review: "human" | "auto";
+  review: "human" | "auto" | { auto: string[] };
   budget?: { actionsPerHour?: number; maxChangesetItems?: number };
   tokens: number;
   lastSeen: string | null;
@@ -86,7 +86,7 @@ export function Agents() {
                   <h2>{a.name}</h2>
                   {a.description && <p className="muted small">{a.description}</p>}
                 </div>
-                <Pill tone={a.review === "human" ? "human" : "mod"}>{a.review === "human" ? t("agents.human") : t("agents.auto")}</Pill>
+                <Pill tone={a.review === "human" ? "human" : typeof a.review === "object" ? "adapt" : "mod"}>{a.review === "human" ? t("agents.human") : typeof a.review === "object" ? t("agents.autoFor", { scopes: a.review.auto.join(", ") }) : t("agents.auto")}</Pill>
               </header>
               <div className="chips">
                 {a.scopes.map((s) => <span key={s} className="chip mono">{s}</span>)}

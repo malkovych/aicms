@@ -5,9 +5,10 @@ import { ManifestView } from "./Modules.tsx";
 import { FieldDiff } from "../diff.tsx";
 import { useT, type Key } from "../i18n.tsx";
 import { Link, navigate } from "../router.tsx";
-import { Avatar, Button, Empty, ErrorBox, Icon, item, list, Pill, Skeleton, TimeAgo, useToast } from "../ui.tsx";
+import { Avatar, Button, Empty, ErrorBox, formatWhen, Icon, item, list, Pill, Skeleton, TimeAgo, toLocalInput, tomorrowMorning, useToast, When } from "../ui.tsx";
 
-type Status = "submitted" | "open" | "merged" | "rejected";
+type Status = "submitted" | "scheduled" | "open" | "merged" | "rejected";
+interface Issue { entry: string; field?: string; message: string; check?: string }
 
 interface Change { field: string; before: unknown; after: unknown }
 interface Item { op: "create" | "update" | "delete" | "install"; model: string; id: string; title?: string; summary?: string; module?: ModuleManifest | null; changes: Change[] }
@@ -18,12 +19,17 @@ interface Changeset {
   note?: string;
   comment?: string;
   waitingBecause?: string;
-  issues?: { entry: string; field?: string; message: string }[];
+  issues?: Issue[];
+  warnings?: Issue[];
+  publishAt?: string;
+  scheduledBy?: string;
+  brief?: string;
   items: Item[];
   updatedAt: string;
 }
 
-const TABS: Status[] = ["submitted", "open", "merged", "rejected"];
+const TABS: Status[] = ["submitted", "scheduled", "open", "merged", "rejected"];
+const STATUS_TONE: Record<Status, string> = { merged: "human", rejected: "gate", submitted: "mod", scheduled: "core", open: "adapt" };
 const OP_TONE = { create: "human", update: "core", delete: "gate", install: "mod" } as const;
 
 export function Inbox({ selected }: { selected?: string }) {
@@ -55,7 +61,7 @@ export function Inbox({ selected }: { selected?: string }) {
       <div className={`split ${selected ? "has-detail" : ""}`}>
         <section className="split-list">
           {data.error ? <ErrorBox error={data.error} onRetry={data.reload} /> : !data.data ? <Skeleton /> : !rows.length ? (
-            <Empty icon="inbox">{tab === "submitted" ? t("inbox.empty.submitted") : t("inbox.empty")}</Empty>
+            <Empty icon={tab === "scheduled" ? "clock" : "inbox"}>{tab === "submitted" ? t("inbox.empty.submitted") : tab === "scheduled" ? t("inbox.empty.scheduled") : t("inbox.empty")}</Empty>
           ) : (
             <motion.ul className="cards" variants={list} initial="initial" animate="enter">
               <AnimatePresence initial={false}>
@@ -113,6 +119,9 @@ function ChangesetCard({ cs, active }: { cs: Changeset; active: boolean }) {
           <div className="card-ops">
             {(["install", "create", "update", "delete"] as const).map((op) => counts[op] ? <Pill key={op} tone={OP_TONE[op]}>{t(`op.${op}`)} · {counts[op]}</Pill> : null)}
             {!!cs.issues?.length && <Pill tone="gate"><Icon name="alert" size={12} /> {cs.issues.length}</Pill>}
+            {!!cs.warnings?.length && <Pill tone="mod"><Icon name="warn" size={12} /> {cs.warnings.length}</Pill>}
+            {cs.publishAt && <Pill tone="core"><Icon name="clock" size={12} /> <When at={cs.publishAt} /></Pill>}
+            {cs.brief && <Pill tone="adapt"><Icon name="brief" size={12} /> {t("inbox.brief")}</Pill>}
           </div>
         </div>
       </Link>
@@ -121,7 +130,7 @@ function ChangesetCard({ cs, active }: { cs: Changeset; active: boolean }) {
 }
 
 function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): void; next?: string }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const toast = useToast();
   const { reload: reloadSite } = useSite();
   const { reload: reloadModules } = useModules();
@@ -130,7 +139,11 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
   const [asking, setAsking] = useState(false);
   const [comment, setComment] = useState("");
   const [final, setFinal] = useState(false);
+  const [picking, setPicking] = useState(false);
   const pending = cs.status === "submitted" || cs.status === "open";
+  const asked = pending && cs.publishAt && Date.parse(cs.publishAt) > Date.now() ? cs.publishAt : undefined;
+  const [when, setWhen] = useState(() => toLocalInput(asked ?? tomorrowMorning()));
+  const whenValid = !!when && Date.parse(when) > Date.now();
 
   const run = async (what: string, fn: () => Promise<string>, goNext = true) => {
     setBusy(what);
@@ -146,10 +159,15 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
     }
   };
 
-  const approve = () => run("merge", async () => {
-    const r = await cms.merge(cs.id);
+  const approve = (at?: string) => run("merge", async () => {
+    const r = await cms.merge(cs.id, { at: at ?? "now" });
+    if (r.status === "scheduled") return t("inbox.scheduledToast", { when: formatWhen(r.publishAt, lang) });
     return r.modules?.length ? t("modules.installedToast", { name: r.modules.join(", ") }) : t("inbox.published", { n: r.entries.length });
   });
+  const unschedule = () => run("unschedule", async () => {
+    await cms.call("cms.unschedule", { id: cs.id });
+    return t("inbox.unscheduled");
+  }, false);
   const reject = () => run("reject", async () => {
     await cms.reject(cs.id, comment.trim(), { final });
     return final ? t("inbox.closed") : t("inbox.sentBack", { actor: cs.actor });
@@ -169,12 +187,14 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
           <h2>{cs.actor}</h2>
           <div className="muted small"><span className="mono">{cs.id}</span> · <TimeAgo at={cs.updatedAt} /> · {t("inbox.items", { n: cs.items.length })}</div>
         </div>
-        <Pill tone={cs.status === "merged" ? "human" : cs.status === "rejected" ? "gate" : cs.status === "submitted" ? "mod" : "adapt"}>{t(`inbox.${cs.status}` as Key)}</Pill>
+        <Pill tone={STATUS_TONE[cs.status]}>{t(`inbox.${cs.status}` as Key)}</Pill>
       </header>
 
-      {(cs.note || cs.waitingBecause || cs.comment) && (
+      {(cs.note || cs.waitingBecause || cs.comment || cs.brief || cs.publishAt) && (
         <dl className="facts">
           {cs.note && <><dt>{t("inbox.note")}</dt><dd>{cs.note}</dd></>}
+          {cs.brief && <><dt>{t("inbox.brief")}</dt><dd><Link to={`/briefs/${cs.brief}`} className="mono">{cs.brief}</Link></dd></>}
+          {cs.publishAt && <><dt>{cs.status === "scheduled" ? t("inbox.publishesAt") : t("inbox.asksAt")}</dt><dd><Icon name="clock" size={14} /> <When at={cs.publishAt} />{cs.scheduledBy ? <span className="muted"> · {cs.scheduledBy}</span> : null}</dd></>}
           {cs.waitingBecause && <><dt>{t("inbox.why")}</dt><dd>{cs.waitingBecause}</dd></>}
           {cs.comment && <><dt>{t("inbox.comment.label")}</dt><dd>{cs.comment}</dd></>}
         </dl>
@@ -186,6 +206,16 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
           <div>
             <strong>{t("inbox.issues")}</strong>
             <ul>{cs.issues.map((i, n) => <li key={n}><span className="mono">{i.entry}{i.field ? `.${i.field}` : ""}</span> — {i.message}</li>)}</ul>
+          </div>
+        </div>
+      )}
+
+      {!!cs.warnings?.length && (
+        <div className="notice notice-mod">
+          <Icon name="warn" />
+          <div>
+            <strong>{t("inbox.warnings")}</strong> <span className="muted small">{t("inbox.warningsHint")}</span>
+            <ul>{cs.warnings.map((w, n) => <li key={n}>{w.message}{w.check && <span className="muted small mono"> · {w.check}</span>}</li>)}</ul>
           </div>
         </div>
       )}
@@ -233,9 +263,49 @@ function Detail({ cs, onDone, next }: { cs: Changeset; onDone(next?: string): vo
                   <Button tone="quiet" onClick={() => setAsking(false)}>{t("cancel")}</Button>
                 </div>
               </motion.div>
+            ) : picking ? (
+              <motion.div key="pick" className="ask" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                <label className="when">
+                  <span className="muted small">{t("inbox.when")}</span>
+                  <input className="input" type="datetime-local" value={when} min={toLocalInput(new Date())} onChange={(e) => setWhen(e.target.value)} autoFocus />
+                </label>
+                <div className="row">
+                  <Button tone="approve" icon="clock" busy={busy === "merge"} disabled={!whenValid || !!cs.issues?.length} onClick={() => approve(new Date(when).toISOString())}>{t("inbox.scheduleConfirm")}</Button>
+                  <Button tone="quiet" onClick={() => setPicking(false)}>{t("cancel")}</Button>
+                </div>
+              </motion.div>
             ) : (
               <motion.div key="buttons" className="row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <Button tone="approve" icon="check" busy={busy === "merge"} disabled={!!cs.issues?.length} onClick={approve}>{installs ? t("inbox.installApprove") : t("inbox.approve")}</Button>
+                {asked ? (
+                  <>
+                    <Button tone="approve" icon="clock" busy={busy === "merge"} disabled={!!cs.issues?.length} onClick={() => approve(asked)}>{t("inbox.scheduleFor", { when: formatWhen(asked, lang) })}</Button>
+                    <Button icon="check" disabled={!!cs.issues?.length || busy === "merge"} onClick={() => approve()}>{t("inbox.publishNow")}</Button>
+                  </>
+                ) : (
+                  <Button tone="approve" icon="check" busy={busy === "merge"} disabled={!!cs.issues?.length} onClick={() => approve()}>{installs ? t("inbox.installApprove") : t("inbox.approve")}</Button>
+                )}
+                {!installs && <Button icon="clock" disabled={!!cs.issues?.length} onClick={() => setPicking(true)}>{t("inbox.schedule")}</Button>}
+                <Button icon="undo" onClick={() => setAsking(true)}>{t("inbox.request")}</Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </footer>
+      )}
+      {cs.status === "scheduled" && (
+        <footer className="decide">
+          <AnimatePresence initial={false} mode="wait">
+            {asking ? (
+              <motion.div key="ask" className="ask" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                <textarea className="input" rows={3} autoFocus value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("inbox.comment")} />
+                <div className="row">
+                  <Button tone="danger" icon="undo" busy={busy === "reject"} disabled={!comment.trim()} onClick={reject}>{t("inbox.send")}</Button>
+                  <Button tone="quiet" onClick={() => setAsking(false)}>{t("cancel")}</Button>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div key="buttons" className="row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <Button tone="approve" icon="check" busy={busy === "merge"} onClick={() => approve()}>{t("inbox.publishNow")}</Button>
+                <Button icon="x" busy={busy === "unschedule"} onClick={unschedule}>{t("inbox.unschedule")}</Button>
                 <Button icon="undo" onClick={() => setAsking(true)}>{t("inbox.request")}</Button>
               </motion.div>
             )}

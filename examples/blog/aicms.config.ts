@@ -1,5 +1,5 @@
 import { defineConfig, sqlite } from "aicms"
-import { i18n, media, search, seo } from "aicms/modules"
+import { i18n, lint, media, search, seo } from "aicms/modules"
 import editorial from "./modules/editorial/module.ts"
 
 export default defineConfig({
@@ -8,7 +8,7 @@ export default defineConfig({
   locales: ["en", "uk"],
   // Requests without a token may read posts and tags.
   public: ["post:read", "tag:read"],
-  modules: [editorial, seo({ siteUrl: "https://blog.example.com" }), search(), media(), i18n()],
+  modules: [editorial, seo({ siteUrl: "https://blog.example.com" }), search(), media(), i18n(), lint()],
   agents: {
     // Writes posts and tags; a person approves every changeset.
     writer: {
@@ -22,5 +22,7 @@ export default defineConfig({
     translator: { scopes: ["post:read", "tag:read", "i18n:translate"], review: "human" },
     // Reviews and publishes other agents' work.
     editor: { scopes: ["post:read", "tag:read", "changesets:review"] },
+    // Plans the week: writes briefs for the other agents.
+    planner: { scopes: ["post:read", "tag:read", "briefs:write"] },
   },
 })

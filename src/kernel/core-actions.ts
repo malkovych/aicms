@@ -451,9 +451,10 @@ export function coreActions(): RegisteredAction[] {
         if (input.state === "left") k.presence.leave(actor, input.id);
         else if (input.state) k.presence.touch(actor, input.id, model.name, input.state);
         const drafts = [];
-        for (const cs of await k.store.listChangesets({ status: ["open", "submitted"], limit: 1000 })) {
+        for (const cs of await k.store.listChangesets({ status: ["open", "submitted", "scheduled"], limit: 1000 })) {
           const item = cs.items.find((i) => i.id === input.id && i.op !== "install");
-          if (item) drafts.push({ actor: cs.actor, changeset: cs.id, status: cs.status === "submitted" ? "waiting for review" : "drafting", op: item.op, fields: Object.keys(item.data ?? {}), mine: cs.actor === actor.id });
+          const status = cs.status === "submitted" ? "waiting for review" : cs.status === "scheduled" ? "scheduled" : "drafting";
+          if (item) drafts.push({ actor: cs.actor, changeset: cs.id, status, ...(cs.status === "scheduled" ? { publishAt: cs.publishAt } : {}), op: item.op, fields: Object.keys(item.data ?? {}), mine: cs.actor === actor.id });
         }
         return { id: input.id, model: model.name, version: entry.version, here: k.presence.list(input.id).filter((p) => p.actor !== actor.id), drafts };
       },

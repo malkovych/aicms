@@ -14,6 +14,7 @@ export function ManifestView({ m }: { m: ModuleManifest }) {
   if (m.models.length) rows.push([t("modules.models"), m.models.map((x) => <span key={x.name} className="chip mono">{x.name}</span>)]);
   if (m.routes.length) rows.push([t("modules.routes"), m.routes.map((r) => <span key={r} className="chip mono">{r}</span>)]);
   if (m.hooks.length) rows.push([t("modules.hooks"), m.hooks.map((h) => <span key={h} className="chip mono">{h}</span>)]);
+  if (m.checks?.length) rows.push([t("modules.checks"), m.checks.map((c) => <span key={c} className="chip mono">{c}</span>)]);
   if (m.scopes.length) rows.push([t("modules.scopes"), m.scopes.map((s) => <span key={s} className="chip mono">{s}</span>)]);
   return (
     <div className="manifest">

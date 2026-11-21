@@ -54,6 +54,11 @@ const PATHS: Record<string, string> = {
   upload: "M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3",
   link: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1",
   file: "M7 3h7l5 5v13H7zM14 3v5h5",
+  clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
+  brief: "M9 4h6v3H9zM9 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-3M9 12h6M9 16h4",
+  send: "M4 12l16-8-6 16-3-7z",
+  warn: "M12 8v5M12 16.5h.01M12 3l9.5 17h-19z",
+  command: "M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z",
 };
 
 export function Icon({ name, size = 18 }: { name: keyof typeof PATHS | string; size?: number }) {
@@ -110,6 +115,33 @@ export function TimeAgo({ at }: { at: string | null | undefined }) {
   const s = (Date.now() - new Date(at).getTime()) / 1000;
   const text = s < 45 ? t("now") : s < 3600 ? t("min", { n: Math.round(s / 60) }) : s < 86400 ? t("hour", { n: Math.round(s / 3600) }) : s < 7 * 86400 ? t("day", { n: Math.round(s / 86400) }) : new Date(at).toLocaleDateString(lang === "uk" ? "uk-UA" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
   return <time dateTime={at} title={new Date(at).toLocaleString()}>{text}</time>;
+}
+
+/** "Fri, 4 Dec, 09:00" in the viewer's time zone. */
+export function formatWhen(at: string, lang: string) {
+  const d = new Date(at);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleString(lang === "uk" ? "uk-UA" : "en-GB", { weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), hour: "2-digit", minute: "2-digit" });
+}
+
+export function When({ at }: { at: string }) {
+  const { lang } = useT();
+  return <time dateTime={at} title={new Date(at).toString()}>{formatWhen(at, lang)}</time>;
+}
+
+/** An ISO time as a value for <input type="datetime-local"> in local time. */
+export function toLocalInput(at: string | Date) {
+  const d = new Date(at);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Tomorrow at 9:00 local time: the default for "schedule". */
+export function tomorrowMorning() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return d;
 }
 
 export function Empty({ icon = "inbox", children }: { icon?: string; children: ReactNode }) {

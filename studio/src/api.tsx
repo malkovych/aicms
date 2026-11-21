@@ -65,7 +65,7 @@ export function useApi<T>(fn: () => Promise<T>, deps: unknown[]) {
 
 type Listener = (e: FeedEvent) => void;
 const LiveContext = createContext<{ connected: boolean; subscribe(fn: Listener): () => void }>({ connected: false, subscribe: () => () => {} });
-const EVENTS = ["action", "presence", "changeset.submitted", "changeset.merged", "changeset.rejected"];
+const EVENTS = ["action", "presence", "changeset.submitted", "changeset.merged", "changeset.rejected", "changeset.scheduled", "changeset.unscheduled", "brief.created", "brief.updated"];
 
 export function LiveProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
@@ -127,6 +127,7 @@ export function useLiveEach(match: (e: FeedEvent) => boolean, fn: (e: FeedEvent)
 }
 
 export const isChangesetEvent = (e: FeedEvent) => e.event.startsWith("changeset.");
+export const isBriefEvent = (e: FeedEvent) => e.event.startsWith("brief.");
 
 // ---------- site and model details ----------
 
@@ -179,6 +180,7 @@ export interface ModuleManifest {
   scopes: string[];
   routes: string[];
   hooks: string[];
+  checks?: string[];
 }
 
 export interface CommunityModule {
