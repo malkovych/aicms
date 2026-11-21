@@ -252,6 +252,33 @@ export default defineModel({
 })
 `;
 
+// Coding agents that read .mcp.json (Claude Code, Cursor…) get the site's tools as "writer".
+const MCP_JSON = `${JSON.stringify({ mcpServers: { aicms: { command: "npx", args: ["aicms", "mcp", "--agent", "writer"] } } }, null, 2)}\n`;
+
+const AGENTS_TEMPLATE = `# AGENTS.md
+
+This site runs on [AICMS](https://github.com/malkovych/aicms), a CMS for AI agents.
+
+## Content
+
+Content lives in a database, not in files. Don't edit \`.aicms/\` directly.
+
+- Read and change content through the AICMS tools. In this folder, \`.mcp.json\` connects
+  you as the \`writer\` agent: \`npx aicms mcp --agent writer\`.
+- Start with \`cms_describe\`: it lists the models, their fields and what you may do.
+- \`cms_briefs\` lists work people assigned to you.
+- Your changes are drafts until you call \`cms_submit\`. A person reviews them in Studio
+  (\`npm run dev\`, then the sign-in link it prints) before anything is published.
+- If \`cms_submit\` returns issues or warnings, fix them with the \`<model>_draft\` tools and submit again.
+
+## Code
+
+- Models: \`models/*.ts\` (\`defineModel\`). Config, agents and permissions: \`aicms.config.ts\`.
+- Modules: \`npx aicms modules\`, \`npx aicms add <name>\`.
+- Types for a frontend: \`npm run types\` writes \`aicms-types.ts\` for \`@aicms/client\`.
+- Docs: https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.md
+`;
+
 function init(dir: string) {
   const root = resolve(process.cwd(), dir);
   if (existsSync(join(root, "aicms.config.ts"))) fail(`${root} already has an aicms.config.ts`);
@@ -259,13 +286,21 @@ function init(dir: string) {
   writeFileSync(join(root, "aicms.config.ts"), CONFIG_TEMPLATE);
   writeFileSync(join(root, "models", "post.ts"), POST_TEMPLATE);
   writeFileSync(join(root, "models", "tag.ts"), TAG_TEMPLATE);
+  const made = ["aicms.config.ts", "models/post.ts", "models/tag.ts"];
+  for (const [file, text] of [[".mcp.json", MCP_JSON], ["AGENTS.md", AGENTS_TEMPLATE]] as const) {
+    if (existsSync(join(root, file))) continue;
+    writeFileSync(join(root, file), text);
+    made.push(file);
+  }
   const gi = join(root, ".gitignore");
-  if (!existsSync(gi) || !readFileSync(gi, "utf8").includes(".aicms")) appendFileSync(gi, "\n.aicms/\n");
-  console.log(`${green("✓")} Created ${bold("aicms.config.ts")}, ${bold("models/post.ts")} and ${bold("models/tag.ts")} in ${root}
+  const ignored = existsSync(gi) ? readFileSync(gi, "utf8") : "";
+  const missing = [".aicms/", "node_modules/"].filter((line) => !ignored.split(/\r?\n/).includes(line));
+  if (missing.length) appendFileSync(gi, `${ignored && !ignored.endsWith("\n") ? "\n" : ""}${missing.join("\n")}\n`);
+  console.log(`${green("✓")} Created ${made.map((f) => bold(f)).join(", ")} in ${root}
 
 Next:
-  aicms agent create writer   ${dim("# a token for your first agent")}
-  aicms dev                   ${dim("# Studio, REST and MCP on http://127.0.0.1:4321")}`);
+  aicms dev                   ${dim("# Studio, REST and MCP on http://127.0.0.1:4321")}
+  aicms agent create writer   ${dim("# a token for an agent that connects over HTTP")}`);
 }
 
 async function main() {

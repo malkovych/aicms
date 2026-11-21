@@ -1,0 +1,53 @@
+name: Release
+# Push a tag v<version> (matching package.json) to publish to npm and PyPI.
+# npm: the NPM_TOKEN secret (an automation token), or npm trusted publishing once
+#      the packages exist. PyPI: a trusted publisher for this workflow and the
+#      "pypi" environment, set up on pypi.org (it can be added before the first release).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:package
+      - run: node scripts/publish.mjs --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Check the version matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: grep -q "^version = \"${GITHUB_REF_NAME#v}\"" sdk/python/pyproject.toml
+      - run: python -m unittest discover -s tests -v
+        working-directory: sdk/python
+      - run: python -m pip install build && python -m build
+        working-directory: sdk/python
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist
+          skip-existing: true

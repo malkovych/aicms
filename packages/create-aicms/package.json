@@ -1,0 +1,24 @@
+{
+  "name": "create-aicms",
+  "version": "0.4.0",
+  "description": "Start an AICMS site: npm create aicms@latest my-site",
+  "keywords": ["cms", "aicms", "create", "scaffold", "ai", "agents", "mcp"],
+  "author": "malkovych",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/malkovych/aicms.git",
+    "directory": "packages/create-aicms"
+  },
+  "homepage": "https://malkovych.github.io/aicms/",
+  "type": "module",
+  "bin": {
+    "create-aicms": "./index.js"
+  },
+  "files": [
+    "index.js"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  }
+}

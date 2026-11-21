@@ -19,6 +19,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run test:package
+        if: matrix.node == 24
   postgres:
     runs-on: ubuntu-latest
     steps:
