@@ -23,17 +23,21 @@ export interface WorkerOptions {
   ownerToken?: string;
 }
 
+/** Requests check for due scheduled changesets at most this often; a cron trigger makes it exact. */
+const LAZY_PUBLISH_MS = 60_000;
+
 /**
  * A Worker that serves every AICMS gate: Studio, REST, GraphQL, MCP, A2A, events.
  * The kernel is created once per isolate; live events and presence are per isolate too.
+ * Scheduled publishing runs from a cron trigger (`"triggers": { "crons": ["* * * * *"] }`)
+ * and, as a fallback, on requests at most once a minute.
  */
 export function createWorker(config: Config, opts: WorkerOptions = {}) {
   let ready: Promise<{ kernel: Kernel; app: ReturnType<typeof createApp> }> | undefined;
   let current: ExecutionContextLike | undefined;
-  return {
-    async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContextLike): Promise<Response> {
-      current = ctx;
-      ready ??= (async () => {
+  let lastPublish = 0;
+  const boot = (env: Record<string, unknown>) =>
+    (ready ??= (async () => {
         const token = env[opts.ownerToken ?? "AICMS_OWNER_TOKEN"];
         const kernel = await createCMS(config, {
           bindings: env,
@@ -46,9 +50,26 @@ export function createWorker(config: Config, opts: WorkerOptions = {}) {
       })().catch((e) => {
         ready = undefined; // try again on the next request
         throw e;
-      });
-      const { app } = await ready;
+      }));
+  const publish = (kernel: Kernel) => {
+    lastPublish = Date.now();
+    return kernel.publishDue().then(
+      (r) => r.failed.forEach((f) => console.warn(`[aicms] scheduled ${f.changeset} went back to its author: ${f.error}`)),
+      (e) => console.error("[aicms] scheduled publishing failed:", e),
+    );
+  };
+  return {
+    async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContextLike): Promise<Response> {
+      current = ctx;
+      const { kernel, app } = await boot(env);
+      if (Date.now() - lastPublish > LAZY_PUBLISH_MS) ctx.waitUntil(publish(kernel));
       return app.fetch(request, env, ctx as Parameters<typeof app.fetch>[2]);
+    },
+    /** Cron trigger: publish what's due. */
+    async scheduled(_controller: unknown, env: Record<string, unknown>, ctx: ExecutionContextLike): Promise<void> {
+      current = ctx;
+      const { kernel } = await boot(env);
+      await publish(kernel);
     },
   };
 }

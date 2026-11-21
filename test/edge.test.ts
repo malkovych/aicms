@@ -96,4 +96,13 @@ test("edge: createWorker on D1 + R2 + Assets, owner token, waitUntil for webhook
   const signin = await worker.fetch(new Request(`https://cms.test${login.path}`), env, ctx);
   assert.equal(signin.status, 302);
   assert.match(signin.headers.get("set-cookie")!, /Secure/, "https requests get a Secure cookie");
+
+  // Scheduled publishing: the cron trigger merges what's due.
+  await call("post.draft", { title: "Edge at nine" });
+  const later = await call("cms.submit", { publishAt: new Date(Date.now() + 3_600_000).toISOString() });
+  assert.equal(later.status, "scheduled");
+  await env.DB.prepare("UPDATE changesets SET meta = json_set(meta, '$.publishAt', ?) WHERE id = ?").bind(new Date(Date.now() - 1000).toISOString(), later.changeset).run();
+  await worker.scheduled({}, env, ctx);
+  const nine = await worker.fetch(new Request("https://cms.test/api/v1/post?slug=edge-at-nine"), env, ctx);
+  assert.equal(((await nine.json()) as any).items[0]?.title, "Edge at nine");
 });

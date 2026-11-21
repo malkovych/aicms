@@ -16,6 +16,13 @@ export function viewEvent(k: Kernel, actor: Actor, e: FeedEvent): FeedEvent | nu
     const m = k.models.get(e.payload?.model);
     return m && actor.kind !== "public" && modelPermissions(actor, m).read ? e : null;
   }
+  if (e.event.startsWith("brief.")) {
+    // Briefs: people and planners see all; an agent hears about the ones for it, including briefs open to anyone.
+    const b = e.payload ?? {};
+    if (allows(actor.scopes, "briefs:write") || b.createdBy === actor.id) return e;
+    if (actor.kind !== "agent") return null;
+    return (b.agent ? b.agent === actor.id : !b.claimedBy || b.claimedBy === actor.id) ? e : null;
+  }
   if (e.event === "action" || !e.event.startsWith("changeset.")) return null;
   const p = e.payload ?? {};
   if (allows(actor.scopes, "changesets:review") || p.actor === actor.id) return e;

@@ -16,6 +16,7 @@ import {
   type TokenKind,
   type TokenRow,
   type VersionRow,
+  changesetMeta,
 } from "./types.ts";
 
 export type SqlValue = string | number | null | Uint8Array;
@@ -69,7 +70,8 @@ CREATE TABLE IF NOT EXISTS changesets (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   merged_at TEXT,
-  merged_by TEXT
+  merged_by TEXT,
+  meta TEXT
 );
 CREATE INDEX IF NOT EXISTS changesets_actor ON changesets(actor, status);
 
@@ -138,6 +140,7 @@ const MIGRATIONS: [string, string, string][] = [
   ["tokens", "kind", "TEXT NOT NULL DEFAULT 'agent'"],
   ["tokens", "expires_at", "TEXT"],
   ["media", "filename", "TEXT"],
+  ["changesets", "meta", "TEXT"],
 ];
 
 const SAFE_IDENT = /^[a-zA-Z][a-zA-Z0-9_]*$/;
@@ -162,6 +165,11 @@ function entryFrom(r: Row): EntryRow {
   };
 }
 
+function metaSql(c: ChangesetRow): string | null {
+  const meta = changesetMeta(c);
+  return meta ? JSON.stringify(meta) : null;
+}
+
 function changesetFrom(r: Row): ChangesetRow {
   return {
     id: r.id as string,
@@ -176,6 +184,7 @@ function changesetFrom(r: Row): ChangesetRow {
     updatedAt: r.updated_at as string,
     mergedAt: (r.merged_at as string) ?? undefined,
     mergedBy: (r.merged_by as string) ?? undefined,
+    ...(r.meta ? JSON.parse(r.meta as string) : {}),
   };
 }
 
@@ -288,19 +297,19 @@ export class SqlStore implements Store {
 
   async createChangeset(c: ChangesetRow) {
     await this.run(
-      `INSERT INTO changesets (id, actor, status, note, comment, review_reason, items, issues, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO changesets (id, actor, status, note, comment, review_reason, items, issues, created_at, updated_at, meta)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       c.id, c.actor, c.status, toSql(c.note), toSql(c.comment), toSql(c.reviewReason),
-      JSON.stringify(c.items), JSON.stringify(c.issues), c.createdAt, c.updatedAt,
+      JSON.stringify(c.items), JSON.stringify(c.issues), c.createdAt, c.updatedAt, metaSql(c),
     );
   }
 
   async saveChangeset(c: ChangesetRow) {
     await this.run(
       `UPDATE changesets SET status = ?, note = ?, comment = ?, review_reason = ?, items = ?, issues = ?,
-       updated_at = ?, merged_at = ?, merged_by = ? WHERE id = ?`,
+       updated_at = ?, merged_at = ?, merged_by = ?, meta = ? WHERE id = ?`,
       c.status, toSql(c.note), toSql(c.comment), toSql(c.reviewReason), JSON.stringify(c.items),
-      JSON.stringify(c.issues), c.updatedAt, toSql(c.mergedAt), toSql(c.mergedBy), c.id,
+      JSON.stringify(c.issues), c.updatedAt, toSql(c.mergedAt), toSql(c.mergedBy), metaSql(c), c.id,
     );
   }
 

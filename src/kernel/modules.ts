@@ -10,6 +10,33 @@ import type { Kernel } from "./cms.ts";
 
 export type EventHandler = (args: { event: string; payload: any; ctx: ModuleContext }) => void | Promise<void>;
 
+/** What a check found. Errors stop the changeset; warnings go to the reviewer. */
+export interface CheckFinding {
+  level: "error" | "warning";
+  /** Dotted path, e.g. "title" or "seo.description". */
+  field?: string;
+  message: string;
+}
+
+/** One proposed entry, as it would be after the change. */
+export interface CheckInput {
+  op: "create" | "update";
+  model: Model;
+  id: string;
+  locale: string;
+  /** The whole entry after the change; block fields as blocks. */
+  data: Record<string, unknown>;
+  /** The published entry, for updates. */
+  before: Record<string, unknown> | null;
+  /** Fields this change sets. */
+  changed: string[];
+  /** Who proposed it: an agent name, "owner", or "module:<name>". */
+  author: string;
+}
+
+/** A content check: runs on every create and update of the models the module may touch (`uses`). */
+export type CheckFn = (input: CheckInput, ctx: ModuleContext) => CheckFinding[] | void | Promise<CheckFinding[] | void>;
+
 /** An HTTP route a module serves, e.g. `"GET /sitemap.xml"` or `"GET /media/:id/:name"`. */
 export type RouteHandler = (args: { request: Request; url: URL; params: Record<string, string>; ctx: ModuleContext }) => Response | Promise<Response>;
 
@@ -30,6 +57,11 @@ export interface ModuleDef {
   on?: Record<string, EventHandler>;
   /** HTTP routes, keyed by "METHOD /path" with `:params`. */
   routes?: Record<string, RouteHandler>;
+  /**
+   * Content checks, like CI for content, keyed by name: they run when changes are
+   * submitted and again before merging. Errors block; warnings go to the reviewer.
+   */
+  checks?: Record<string, CheckFn>;
   /** Implementations of the capabilities in `provides`, e.g. `{ search: { query } }`. */
   services?: Record<string, unknown>;
   /** Runs once when the kernel starts (or the module is installed). */
@@ -45,6 +77,9 @@ export function defineModule(def: Omit<ModuleDef, "kind">): ModuleDef {
   }
   for (const route of Object.keys(def.routes ?? {})) {
     if (!/^(GET|POST|PUT|PATCH|DELETE|HEAD) \/\S*$/.test(route)) throw new Error(`Route "${route}" in module "${def.name}" must look like "GET /path"`);
+  }
+  for (const key of Object.keys(def.checks ?? {})) {
+    if (!/^[a-z][a-z0-9-]*$/.test(key)) throw new Error(`Check "${def.name}/${key}" must be lowercase letters, digits and hyphens`);
   }
   for (const cap of Object.keys(def.services ?? {})) {
     if (!(def.provides ?? []).includes(cap)) throw new Error(`Module "${def.name}" has a "${cap}" service but doesn't list it in provides`);
@@ -163,7 +198,7 @@ export function moduleContext(k: Kernel, mod: ModuleDef, actor: Actor, gate: Gat
     },
     draft: (name, data) => draftEntry(k, actor, model(name), data, { trusted: true }),
     remove: (name, id) => deleteEntry(k, actor, model(name), id, { trusted: true }),
-    submit: (note) => submitChangeset(k, actor, note),
+    submit: (note) => submitChangeset(k, actor, { note }),
     models: () => [...k.models.values()].filter((m) => all || own.has(m.name)),
     readable: (name) => {
       const m = k.models.get(name);
@@ -272,6 +307,7 @@ export function moduleManifest(mod: ModuleDef) {
     scopes: [...new Set(Object.values(mod.actions ?? {}).map((a) => a.scope).filter(Boolean) as string[])],
     routes: Object.keys(mod.routes ?? {}),
     hooks: Object.keys(mod.on ?? {}),
+    checks: Object.keys(mod.checks ?? {}).map((c) => `${mod.name}/${c}`),
   };
 }
 

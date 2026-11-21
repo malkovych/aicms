@@ -9,7 +9,11 @@ import { DEFAULT_REGISTRY } from "./registry.ts";
 export interface AgentConfig {
   /** e.g. ["post:draft", "tag:read", "post:update.seo"] */
   scopes: string[];
-  /** "human" (default): a person approves. "auto": merged when checks pass and no model requires a person. */
+  /**
+   * "human" (default): a person approves. "auto": merged when checks pass and no model requires a person.
+   * `{ auto: ["post:update.seo"] }`: merged without a person only for changes these scopes cover.
+   * Check warnings always send changes to a person.
+   */
   review?: ReviewMode;
   budget?: Budget;
   description?: string;
@@ -65,7 +69,9 @@ export function resolveConfig(c: Config): ResolvedConfig {
     if (!AGENT_NAME.test(name)) throw new Error(`Agent name "${name}" must be lowercase letters, digits, - or _`);
     if (name === "owner" || name === "public") throw new Error(`Agent name "${name}" is reserved`);
     if (!Array.isArray(a.scopes)) throw new Error(`Agent "${name}" needs a scopes array`);
-    if (a.review && a.review !== "human" && a.review !== "auto") throw new Error(`Agent "${name}": review must be "human" or "auto"`);
+    const r = a.review;
+    const rule = typeof r === "object" && r !== null && Array.isArray(r.auto) && r.auto.every((x) => typeof x === "string");
+    if (r !== undefined && r !== "human" && r !== "auto" && !rule) throw new Error(`Agent "${name}": review must be "human", "auto" or { auto: ["<scope>", …] }`);
   }
   const locales = c.locales?.length ? c.locales : ["en"];
   return {

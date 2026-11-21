@@ -8,5 +8,7 @@
   // wrangler r2 bucket create aicms-media
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "aicms-media" }],
   // Studio, prebuilt inside the aicms package
-  "assets": { "directory": "./node_modules/aicms/dist/studio", "binding": "ASSETS", "run_worker_first": true }
+  "assets": { "directory": "./node_modules/aicms/dist/studio", "binding": "ASSETS", "run_worker_first": true },
+  // Scheduled publishing: check for due changesets every minute
+  "triggers": { "crons": ["* * * * *"] }
 }

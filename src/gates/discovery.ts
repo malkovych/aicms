@@ -34,7 +34,8 @@ export function llmsTxt(k: Kernel, actor: Actor, origin: string): string {
   lines.push(
     "",
     "## Publishing",
-    "Agents write drafts into a changeset (`<model>_draft`) and send it with `cms_submit`. Checks run on submit; a person or the agent's review policy decides whether it is merged. `cms_changes` shows decisions and comments.",
+    "Agents write drafts into a changeset (`<model>_draft`) and send it with `cms_submit`. Checks run on submit (`cms_check` runs them earlier): errors must be fixed, warnings go to the reviewer. A person or the agent's review policy decides whether it is merged, now or at a scheduled time. `cms_changes` shows decisions and comments.",
+    "People hand agents work as briefs: `cms_briefs` lists yours, `cms_brief_update` reports progress or asks a question, and `cms_submit({ brief })` answers one.",
     "",
   );
   return lines.join("\n");

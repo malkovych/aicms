@@ -9,8 +9,10 @@ import { VERSION } from "./discovery.ts";
 
 const INSTRUCTIONS = `This is an AICMS content site.
 Start with cms_describe: it lists the models you can work with, their writing guides and your permissions.
+cms_briefs lists work people gave you; report on a brief with cms_brief_update.
 Read with <model>_list and <model>_get. Write with <model>_draft; block fields accept Markdown.
-Your edits are drafts in a changeset. Call cms_submit when you're done; nothing is public until it is merged.
+Your edits are drafts in a changeset. cms_check runs the site's checks; fix errors, and warnings when you can.
+Call cms_submit when you're done (with { brief } if it answers one); nothing is public until it is merged.
 cms_changes shows review decisions and reviewer comments.`;
 
 /** An MCP server whose tool list is exactly what this actor may call. */

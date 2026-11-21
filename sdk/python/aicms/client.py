@@ -13,7 +13,7 @@ __all__ = ["Client", "Model", "Event", "AicmsError"]
 JSON = Dict[str, Any]
 
 # Read-only Actions go over GET, so HTTP caches can keep them.
-_READ_ONLY = {"cms.describe", "cms.search", "cms.changes", "cms.review", "cms.history", "cms.agents", "cms.log"}
+_READ_ONLY = {"cms.describe", "cms.search", "cms.changes", "cms.review", "cms.history", "cms.agents", "cms.log", "cms.check", "cms.briefs"}
 
 
 def _is_read(action: str) -> bool:
@@ -141,9 +141,23 @@ class Client:
     def search(self, query: str, model: Optional[str] = None, limit: Optional[int] = None) -> JSON:
         return self.call("cms.search", _compact(query=query, model=model, limit=limit))
 
-    def submit(self, note: Optional[str] = None) -> JSON:
-        """Run checks and send your drafts for review. `status` is merged, submitted or needs_changes."""
-        return self.call("cms.submit", _compact(note=note))
+    def submit(self, note: Optional[str] = None, brief: Optional[str] = None, publish_at: Optional[str] = None) -> JSON:
+        """Run checks and send your drafts for review. `status` is merged, submitted, scheduled or needs_changes.
+
+        Pass `brief` when the changes answer a brief, `publish_at` (ISO 8601) to ask for a publish time."""
+        return self.call("cms.submit", _compact(note=note, brief=brief, publishAt=publish_at))
+
+    def check(self) -> JSON:
+        """Run every check on your drafts without submitting: issues to fix, warnings for the reviewer."""
+        return self.call("cms.check", {})
+
+    def briefs(self, id: Optional[str] = None, status: Optional[List[str]] = None) -> JSON:
+        """Work people gave you: briefs not done yet, or one brief (with its notes) by id."""
+        return self.call("cms.briefs", _compact(id=id, status=status))
+
+    def brief_update(self, id: str, status: Optional[str] = None, note: Optional[str] = None) -> JSON:
+        """Take a brief (in_progress), ask a question (blocked + note), give it back (open) or finish it (done + note)."""
+        return self.call("cms.brief_update", _compact(id=id, status=status, note=note))
 
     def discard(self, id: Optional[str] = None) -> JSON:
         """Drop drafts you haven't submitted: one entry, or all of them."""
@@ -157,8 +171,12 @@ class Client:
         """For reviewers: changesets waiting for a decision, with before/after per field."""
         return self.call("cms.review", _compact(id=id, status=status))
 
-    def merge(self, id: str) -> JSON:
-        return self.call("cms.merge", {"id": id})
+    def merge(self, id: str, at: Optional[str] = None) -> JSON:
+        """Publish a changeset now, or at an ISO 8601 time."""
+        return self.call("cms.merge", _compact(id=id, at=at))
+
+    def unschedule(self, id: str) -> JSON:
+        return self.call("cms.unschedule", {"id": id})
 
     def reject(self, id: str, comment: str, final: bool = False) -> JSON:
         return self.call("cms.reject", {"id": id, "comment": comment, **({"final": True} if final else {})})

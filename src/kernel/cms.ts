@@ -8,7 +8,8 @@ import { SqlStore } from "../store/sql.ts";
 import { d1Driver, type D1DatabaseLike } from "../store/d1.ts";
 import type { Store } from "../store/types.ts";
 import { toolName, type Gate, type RegisteredAction } from "./action.ts";
-import { newId, rejectChangeset } from "./changesets.ts";
+import { newId, publishDue, rejectChangeset } from "./changesets.ts";
+import { watchBriefs } from "./briefs.ts";
 import { coreActions } from "./core-actions.ts";
 import { AicmsError } from "./errors.ts";
 import { modelActions } from "./model-actions.ts";
@@ -106,6 +107,10 @@ export interface Kernel {
   emit(event: string, payload: unknown): Promise<void>;
   readonly feed: Feed;
   readonly presence: Presence;
+  /** Merge the scheduled changesets whose time has come. */
+  publishDue(): Promise<{ merged: string[]; failed: { changeset: string; error: string }[] }>;
+  /** Run publishDue every `everyMs` (default 30 s) until stopped or closed. */
+  startScheduler(everyMs?: number): () => void;
   close(): Promise<void>;
 }
 
@@ -393,7 +398,7 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
 
     async revokeAgent(agent) {
       const tokens = await store.revokeTokens(agent, new Date().toISOString());
-      const pending = await store.listChangesets({ actor: agent, status: ["open", "submitted"], limit: 1000 });
+      const pending = await store.listChangesets({ actor: agent, status: ["open", "submitted", "scheduled"], limit: 1000 });
       for (const cs of pending) await rejectChangeset(kernel, cs.id, "owner", "Access revoked", true);
       return { tokens, changesets: pending.length };
     },
@@ -427,11 +432,37 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
 
     feed,
     presence,
+
+    async publishDue() {
+      // One run at a time: a slow merge must not be picked up twice by the next tick.
+      if (publishing) return publishing;
+      publishing = publishDue(kernel).finally(() => (publishing = null));
+      return publishing;
+    },
+
+    startScheduler(everyMs = 30_000) {
+      const tick = () => kernel.publishDue().then(
+        (r) => r.failed.forEach((f) => console.warn(`[aicms] scheduled ${f.changeset} went back to its author: ${f.error}`)),
+        (e) => console.error("[aicms] scheduler failed:", e),
+      );
+      const timer = setInterval(tick, everyMs);
+      (timer as { unref?: () => void }).unref?.();
+      timers.add(timer);
+      void tick();
+      return () => {
+        clearInterval(timer);
+        timers.delete(timer);
+      };
+    },
+
     close: async () => {
       clearInterval(sweeper);
+      for (const t of timers) clearInterval(t);
       await store.close();
     },
   };
+  let publishing: ReturnType<Kernel["publishDue"]> | null = null;
+  const timers = new Set<ReturnType<typeof setInterval>>();
 
   function checkRefs() {
     for (const m of models.values()) {
@@ -470,6 +501,7 @@ export async function createCMS(input: Config, opts: CreateOptions = {}): Promis
   for (const mod of config.modules) for (const a of moduleActions(mod)) addAction(a);
 
   await store.init([...models.values()].map((m) => ({ model: m.name, fields: indexedFields(m) })));
+  watchBriefs(kernel);
   for (const mod of config.modules) await register(mod);
   return kernel;
 }

@@ -84,6 +84,19 @@ class ClientTest(unittest.TestCase):
         self.cms.submit(note="Done")
         self.assertEqual(Stub.requests[-1][1:5:3], ("/api/v1/actions/cms.submit", {"note": "Done"}))
 
+    def test_briefs_checks_and_schedules(self):
+        self.cms.submit(note="Menu", brief="br_1", publish_at="2026-12-04T09:00:00Z")
+        self.assertEqual(Stub.requests[-1][4], {"note": "Menu", "brief": "br_1", "publishAt": "2026-12-04T09:00:00Z"})
+        self.cms.check()
+        self.assertEqual(Stub.requests[-1][:2], ("GET", "/api/v1/actions/cms.check"))
+        self.cms.briefs(status=["open", "blocked"])
+        method, path, query, _, _ = Stub.requests[-1]
+        self.assertEqual((method, path, json.loads(query["input"][0])), ("GET", "/api/v1/actions/cms.briefs", {"status": ["open", "blocked"]}))
+        self.cms.brief_update("br_1", status="blocked", note="Which dishes?")
+        self.assertEqual(Stub.requests[-1][4], {"id": "br_1", "status": "blocked", "note": "Which dishes?"})
+        self.cms.merge("cs_1", at="2026-12-04T09:00:00Z")
+        self.assertEqual(Stub.requests[-1][4], {"id": "cs_1", "at": "2026-12-04T09:00:00Z"})
+
     def test_errors_carry_code_and_status(self):
         with self.assertRaises(AicmsError) as ctx:
             self.cms.post.get(slug="nope")

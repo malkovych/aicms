@@ -13,6 +13,8 @@ export interface SeoOptions {
   models?: string[];
   /** Public path of an entry. Default: `/${model}/${slug}`. */
   path?: (model: string, entry: Record<string, unknown> & { id: string; locale: string }) => string;
+  /** Turn SEO problems in changed fields into warnings for the reviewer. Default true. */
+  checks?: boolean;
 }
 
 export interface SeoIssue {
@@ -100,6 +102,18 @@ export function seo(opts: SeoOptions = {}) {
     description: "Scores entries for search engines with concrete fixes, and serves sitemap.xml and robots.txt.",
     provides: ["seo"],
     uses: ["*"],
+    checks:
+      opts.checks === false
+        ? {}
+        : {
+            // Errors and warnings from the audit, for the fields this change touches. Tips stay in seo.audit.
+            audit: ({ model, data, op, changed }) => {
+              if (opts.models ? !opts.models.includes(model.name) : !slugField(model)) return [];
+              return auditEntry(model, data)
+                .issues.filter((i) => i.level !== "tip" && (op === "create" || !i.field || changed.includes(i.field.split(".")[0])))
+                .map((i) => ({ level: "warning" as const, field: i.field, message: `SEO: ${i.message}` }));
+            },
+          },
     actions: {
       audit: action({
         description: "Score one entry 0–100 for SEO with concrete fixes: title and description length, slug, word count, heading order, image alt text, internal links. Includes your unsubmitted drafts, so run it before cms_submit.",

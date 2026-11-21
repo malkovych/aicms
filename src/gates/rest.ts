@@ -186,7 +186,8 @@ export function createApp(k: Kernel, opts: AppOptions = {}): Hono<Env> {
   );
   app.get("/api/v1/changesets/:id", async (c) => c.json(await call(c, "cms.review", { id: c.req.param("id") })));
   app.post("/api/v1/changesets/submit", async (c) => c.json(await call(c, "cms.submit", await body(c))));
-  app.post("/api/v1/changesets/:id/merge", async (c) => c.json(await call(c, "cms.merge", { id: c.req.param("id") })));
+  app.post("/api/v1/changesets/:id/merge", async (c) => c.json(await call(c, "cms.merge", { ...(await body(c)), id: c.req.param("id") })));
+  app.post("/api/v1/changesets/:id/unschedule", async (c) => c.json(await call(c, "cms.unschedule", { id: c.req.param("id") })));
   app.post("/api/v1/changesets/:id/reject", async (c) => c.json(await call(c, "cms.reject", { ...(await body(c)), id: c.req.param("id") })));
   app.post("/api/v1/changesets/:id/revert", async (c) => {
     const draft = await call(c, "cms.revert", { changeset: c.req.param("id") });

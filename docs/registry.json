@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-19",
+  "updated": "2026-11-21",
   "modules": [
     {
       "name": "seo",
@@ -30,6 +30,30 @@
         "seo",
         "sitemap",
         "marketing"
+      ]
+    },
+    {
+      "name": "lint",
+      "title": "Lint",
+      "summary": "Content checks on every change: placeholders block; filler phrases, long sentences and missing alt text warn.",
+      "package": "aicms/modules",
+      "official": true,
+      "author": "AICMS",
+      "homepage": "https://github.com/malkovych/aicms/tree/main/src/modules",
+      "license": "MIT",
+      "provides": [],
+      "requires": [],
+      "uses": [
+        "*"
+      ],
+      "scopes": [],
+      "routes": [],
+      "hooks": [],
+      "tags": [
+        "quality",
+        "checks",
+        "writing",
+        "style"
       ]
     },
     {

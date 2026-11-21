@@ -1,6 +1,16 @@
 import type { Model } from "../schema/model.ts";
 
-export type ReviewMode = "human" | "auto";
+/**
+ * "human": a person approves every change. "auto": merged when checks pass.
+ * `{ auto: scopes }`: merged without a person only when every change is covered
+ * by these scopes, e.g. `{ auto: ["post:update.seo", "tag:create"] }`.
+ */
+export type ReviewMode = "human" | "auto" | { auto: string[] };
+
+/** One line for people: "human", "auto", or "auto for post:update.seo, tag:create". */
+export function describeReview(r: ReviewMode): string {
+  return typeof r === "string" ? r : `auto for ${r.auto.join(", ") || "nothing"}`;
+}
 
 export interface Budget {
   /** Calls of any Action per rolling hour. */

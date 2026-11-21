@@ -7,7 +7,7 @@ import { serve } from "@hono/node-server";
 import { createCMS, type Kernel } from "./kernel/cms.ts";
 import { summarize } from "./kernel/changesets.ts";
 import { isAicmsError } from "./kernel/errors.ts";
-import { OWNER } from "./kernel/policy.ts";
+import { OWNER, describeReview } from "./kernel/policy.ts";
 import { createApp } from "./gates/rest.ts";
 import { serveStdio } from "./gates/mcp.ts";
 import { VERSION } from "./gates/discovery.ts";
@@ -46,10 +46,16 @@ Modules
   sync export | import          git-sync: write content to Markdown, or draft file edits
                                 (--agent <name> to import as an agent, --submit to send for review)
 
+Briefs
+  brief "Title" [--agent <a>]   Hand an agent work (--details, --model, --due, --at <publish time>)
+  briefs [--all]                Briefs not done yet (--all: every brief)
+
 Review
   changes [--all]               Changesets waiting for review (--all: every recent one)
   show <id>                     Before/after for every field in a changeset
-  merge <id>                    Publish a changeset
+  merge <id> [--at <time>]      Publish a changeset, now or at an ISO time
+  unschedule <id>               Take a scheduled changeset off the schedule
+  publish-due                   Publish scheduled changesets that are due (for cron without a server)
   reject <id> --comment "..."   Send it back to the agent (--final closes it instead)
   log [--limit 20]              Recent actions from people and agents
 
@@ -153,7 +159,10 @@ function printChangeset(cs: any) {
   if (cs.note) console.log(`  note: ${cs.note}`);
   if (cs.waitingBecause) console.log(dim(`  waiting: ${cs.waitingBecause}`));
   if (cs.comment) console.log(`  comment: ${cs.comment}`);
+  if (cs.brief) console.log(`  brief: ${cs.brief}`);
+  if (cs.publishAt) console.log(`  ${cs.status === "scheduled" ? "publishes" : "asks to publish"} at ${bold(cs.publishAt)}`);
   for (const issue of cs.issues ?? []) console.log(red(`  ! ${issue.entry}${issue.field ? `.${issue.field}` : ""}: ${issue.message}`));
+  for (const w of cs.warnings ?? []) console.log(yellow(`  ⚠ ${w.entry}${w.field ? `.${w.field}` : ""}: ${w.message}${w.check ? dim(` (${w.check})`) : ""}`));
   for (const item of cs.items) {
     const fields = item.changes ? item.changes.map((c: any) => c.field) : item.fields ?? [];
     console.log(`  ${item.op.padEnd(6)} ${item.model} ${dim(item.id)}${fields.length ? `  ${dim(fields.join(", "))}` : ""}`);
@@ -321,6 +330,10 @@ async function main() {
       force: { type: "boolean" },
       all: { type: "boolean" },
       json: { type: "boolean" },
+      at: { type: "string" },
+      details: { type: "string", short: "d" },
+      model: { type: "string" },
+      due: { type: "string" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
@@ -408,6 +421,7 @@ async function main() {
       const hostname = values.host ?? process.env.HOST ?? "127.0.0.1";
       const app = createApp(k);
       const code = await k.createLoginCode();
+      k.startScheduler();
       serve({ fetch: app.fetch, port, hostname }, (info) => {
         const base = `http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${info.port}`;
         const agents = Object.keys(k.config.agents);
@@ -562,7 +576,7 @@ async function main() {
       if (sub === "create") {
         const token = await k.createToken(name);
         const actor = k.actor(name);
-        console.log(`${green("✓")} Token for ${bold(name)} ${dim(`(scopes: ${actor.scopes.join(", ")}; review: ${actor.review})`)}\n\n  ${bold(token)}\n\n${dim("Shown once. Connect an MCP client:")}\n  claude mcp add --transport http aicms http://127.0.0.1:4321/mcp --header "Authorization: Bearer ${token}"`);
+        console.log(`${green("✓")} Token for ${bold(name)} ${dim(`(scopes: ${actor.scopes.join(", ")}; review: ${describeReview(actor.review)})`)}\n\n  ${bold(token)}\n\n${dim("Shown once. Connect an MCP client:")}\n  claude mcp add --transport http aicms http://127.0.0.1:4321/mcp --header "Authorization: Bearer ${token}"`);
       } else if (sub === "revoke") {
         const r = await k.revokeAgent(name);
         console.log(`${green("✓")} Revoked ${r.tokens} token(s) of ${bold(name)}; rejected ${r.changesets} unmerged changeset(s)`);
@@ -588,10 +602,54 @@ async function main() {
     }
 
     case "merge": {
-      if (!args[0]) fail("Usage: aicms merge <changeset-id>");
-      const r: any = await asOwner(k, "cms.merge", { id: args[0] });
+      if (!args[0]) fail("Usage: aicms merge <changeset-id> [--at <ISO time>|now]");
+      const r: any = await asOwner(k, "cms.merge", { id: args[0], ...(values.at ? { at: values.at } : {}) });
+      if (r.status === "scheduled") {
+        console.log(`${green("✓")} Scheduled ${bold(r.changeset)} for ${bold(r.publishAt)} ${dim("(published by aicms dev/start while it runs)")}`);
+        break;
+      }
       console.log(`${green("✓")} Merged ${bold(r.changeset)} from ${r.actor}`);
       for (const e of r.entries) console.log(`  ${e.op.padEnd(6)} ${e.model} ${dim(e.id)} v${e.version}`);
+      break;
+    }
+
+    case "unschedule": {
+      if (!args[0]) fail("Usage: aicms unschedule <changeset-id>");
+      await asOwner(k, "cms.unschedule", { id: args[0] });
+      console.log(`${green("✓")} ${bold(args[0])} is off the schedule and waits for review`);
+      break;
+    }
+
+    case "publish-due": {
+      const r = await k.publishDue();
+      console.log(r.merged.length ? `${green("✓")} Published ${r.merged.join(", ")}` : dim("Nothing due."));
+      for (const f of r.failed) console.log(red(`  ! ${f.changeset}: ${f.error}`));
+      break;
+    }
+
+    case "briefs": {
+      const res: any = await asOwner(k, "cms.briefs", values.all ? { status: ["open", "in_progress", "blocked", "in_review", "done", "canceled"] } : {});
+      if (values.json) console.log(JSON.stringify(res, null, 2));
+      else if (!res.briefs.length) console.log(dim('No open briefs. Write one: aicms brief "Title" --agent writer'));
+      for (const b of values.json ? [] : res.briefs) {
+        const tone = b.status === "blocked" ? red : b.status === "done" ? green : b.status === "in_review" ? yellow : blue;
+        console.log(`${bold(b.id)}  ${tone(b.status)}  ${b.title}  ${dim([b.agent ?? b.claimedBy ?? "any agent", b.due && `due ${b.due}`].filter(Boolean).join(" · "))}`);
+        if (b.lastNote) console.log(dim(`  ${b.lastNote.by}: ${b.lastNote.text}`));
+      }
+      break;
+    }
+
+    case "brief": {
+      if (!args[0]) fail('Usage: aicms brief "Title" [--details "..."] [--agent writer] [--model post] [--due 2026-12-01] [--at <publish time>]');
+      const r: any = await asOwner(k, "cms.brief", {
+        title: args.join(" "),
+        ...(values.details ? { details: values.details } : {}),
+        ...(values.agent ? { agent: values.agent } : {}),
+        ...(values.model ? { model: values.model } : {}),
+        ...(values.due ? { due: values.due } : {}),
+        ...(values.at ? { publishAt: values.at } : {}),
+      });
+      console.log(`${green("✓")} Brief ${bold(r.brief.id)}: ${r.brief.title}\n  ${dim(r.next)}`);
       break;
     }
 

@@ -71,14 +71,48 @@ export interface CheckIssue {
   model: string;
   field?: string;
   message: string;
+  /** The module check that found it, e.g. "lint/text". */
+  check?: string;
 }
 
 export interface SubmitResult {
-  status: "merged" | "submitted" | "needs_changes";
+  status: "merged" | "submitted" | "scheduled" | "needs_changes";
   changeset: string;
   reason?: string;
   issues?: CheckIssue[];
+  /** Module check warnings: the reviewer sees them. */
+  warnings?: CheckIssue[];
+  publishAt?: string;
   entries?: { id: string; model: string; op: string; version: number }[];
+}
+
+export interface CheckResult {
+  changeset: string;
+  ready: boolean;
+  issues: CheckIssue[];
+  warnings: CheckIssue[];
+  /** What cms.submit would do: "merged right away" or "waits for a person: …". */
+  onSubmit?: string;
+}
+
+export type BriefStatus = "open" | "in_progress" | "blocked" | "in_review" | "done" | "canceled";
+
+export interface Brief {
+  id: string;
+  title: string;
+  details?: string;
+  agent?: string;
+  model?: string;
+  entry?: string;
+  due?: string;
+  publishAt?: string;
+  status: BriefStatus;
+  claimedBy?: string;
+  changesets: string[];
+  notes: { at: string; by: string; text: string }[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface FeedEvent<P = any> {
@@ -122,7 +156,7 @@ export class AicmsClientError extends Error {
   }
 }
 
-const READ_ONLY = new Set(["cms.describe", "cms.search", "cms.changes", "cms.review", "cms.history", "cms.agents", "cms.log"]);
+const READ_ONLY = new Set(["cms.describe", "cms.search", "cms.changes", "cms.review", "cms.history", "cms.agents", "cms.log", "cms.check", "cms.briefs"]);
 /** Read-only Actions go over GET so HTTP caches and frameworks can keep them. */
 const isRead = (action: string) => READ_ONLY.has(action) || /\.(list|get)$/.test(action);
 
@@ -134,13 +168,21 @@ export interface BaseClient<S extends AnySchema> {
   describe(model?: Key<S>): Promise<any>;
   search(query: string, opts?: { model?: Key<S>; limit?: number }): Promise<{ query: string; hits: { model: string; id: string; title: string; field: string; snippet: string }[] }>;
   /** Run checks and send your drafts for review (or merge them, depending on your review mode). */
-  submit(note?: string): Promise<SubmitResult>;
+  submit(note?: string | { note?: string; brief?: string; publishAt?: string }): Promise<SubmitResult>;
+  /** Run every check on your drafts without submitting. */
+  check(): Promise<CheckResult>;
+  /** Briefs for you that aren't done yet, or one brief with its notes. */
+  briefs(opts?: { status?: BriefStatus[]; agent?: string }): Promise<{ briefs: (Omit<Brief, "notes"> & { notes: number })[]; total: number }>;
+  brief(id: string): Promise<{ brief: Brief }>;
+  /** Report on a brief: take it, ask a question ("blocked" with a note), give it back, or finish it. */
+  updateBrief(id: string, update: { status?: "in_progress" | "blocked" | "open" | "done"; note?: string }): Promise<any>;
   /** Drop drafts you haven't submitted: one entry, or all of them. */
   discard(id?: string): Promise<{ changeset: string | null; discarded: number; left: number }>;
   /** Your recent changesets with decisions and reviewer comments. */
   changes(limit?: number): Promise<{ changesets: any[] }>;
   review(id?: string): Promise<any>;
-  merge(id: string): Promise<any>;
+  /** Publish now, or at an ISO time with { at }. */
+  merge(id: string, opts?: { at?: string }): Promise<any>;
   reject(id: string, comment: string, opts?: { final?: boolean }): Promise<any>;
   history(id: string, version?: number): Promise<any>;
   /** Draft a change that restores an entry to an earlier version. Then `submit()`. */
@@ -275,11 +317,15 @@ export function createClient<S extends AnySchema = AnySchema>(opts: ClientOption
     model: model as BaseClient<S>["model"],
     describe: (m) => call("cms.describe", m ? { model: m } : {}),
     search: (query, o = {}) => call("cms.search", { query, ...o }),
-    submit: (note) => call("cms.submit", note ? { note } : {}),
+    submit: (note) => call("cms.submit", typeof note === "string" ? { note } : note ?? {}),
+    check: () => call("cms.check", {}),
+    briefs: (o = {}) => call("cms.briefs", o),
+    brief: (id) => call("cms.briefs", { id }),
+    updateBrief: (id, update) => call("cms.brief_update", { id, ...update }),
     discard: (id) => call("cms.discard", id ? { id } : {}),
     changes: (limit) => call("cms.changes", limit ? { limit } : {}),
     review: (id) => call("cms.review", id ? { id } : {}),
-    merge: (id) => call("cms.merge", { id }),
+    merge: (id, o = {}) => call("cms.merge", { id, ...o }),
     reject: (id, comment, o = {}) => call("cms.reject", { id, comment, ...o }),
     history: (id, version) => call("cms.history", version ? { id, version } : { id }),
     restore: (id, version) => call("cms.restore", { id, version }),

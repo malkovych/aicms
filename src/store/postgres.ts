@@ -16,6 +16,7 @@ import {
   type TokenKind,
   type TokenRow,
   type VersionRow,
+  changesetMeta,
 } from "./types.ts";
 
 /** The minimum a Postgres client must do. */
@@ -149,8 +150,10 @@ CREATE TABLE IF NOT EXISTS changesets (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   merged_at TEXT,
-  merged_by TEXT
+  merged_by TEXT,
+  meta JSONB
 );
+ALTER TABLE changesets ADD COLUMN IF NOT EXISTS meta JSONB;
 CREATE INDEX IF NOT EXISTS changesets_actor ON changesets(actor, status);
 
 CREATE TABLE IF NOT EXISTS events (
@@ -235,6 +238,11 @@ function entryFrom(r: any): EntryRow {
   };
 }
 
+function metaJson(c: ChangesetRow): string | null {
+  const meta = changesetMeta(c);
+  return meta ? json(meta) : null;
+}
+
 function changesetFrom(r: any): ChangesetRow {
   return {
     id: r.id,
@@ -249,6 +257,7 @@ function changesetFrom(r: any): ChangesetRow {
     updatedAt: r.updated_at,
     mergedAt: r.merged_at ?? undefined,
     mergedBy: r.merged_by ?? undefined,
+    ...(r.meta ?? {}),
   };
 }
 
@@ -355,17 +364,17 @@ export class PostgresStore implements Store {
 
   async createChangeset(c: ChangesetRow) {
     await this.d.query(
-      `INSERT INTO changesets (id, actor, status, note, comment, review_reason, items, issues, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10)`,
-      [c.id, c.actor, c.status, c.note ?? null, c.comment ?? null, c.reviewReason ?? null, json(c.items), json(c.issues), c.createdAt, c.updatedAt],
+      `INSERT INTO changesets (id, actor, status, note, comment, review_reason, items, issues, created_at, updated_at, meta)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11::jsonb)`,
+      [c.id, c.actor, c.status, c.note ?? null, c.comment ?? null, c.reviewReason ?? null, json(c.items), json(c.issues), c.createdAt, c.updatedAt, metaJson(c)],
     );
   }
 
   async saveChangeset(c: ChangesetRow) {
     await this.d.query(
       `UPDATE changesets SET status = $1, note = $2, comment = $3, review_reason = $4, items = $5::jsonb, issues = $6::jsonb,
-       updated_at = $7, merged_at = $8, merged_by = $9 WHERE id = $10`,
-      [c.status, c.note ?? null, c.comment ?? null, c.reviewReason ?? null, json(c.items), json(c.issues), c.updatedAt, c.mergedAt ?? null, c.mergedBy ?? null, c.id],
+       updated_at = $7, merged_at = $8, merged_by = $9, meta = $10::jsonb WHERE id = $11`,
+      [c.status, c.note ?? null, c.comment ?? null, c.reviewReason ?? null, json(c.items), json(c.issues), c.updatedAt, c.mergedAt ?? null, c.mergedBy ?? null, metaJson(c), c.id],
     );
   }
 

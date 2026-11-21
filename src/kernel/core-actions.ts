@@ -4,6 +4,7 @@ import { displayTitle, filterableFields, projectData, uniqueFields, type Model }
 import type { EntryRow } from "../store/types.ts";
 import type { RegisteredAction } from "./action.ts";
 import {
+  checkDrafts,
   diffChangeset,
   discardDrafts,
   entryHistory,
@@ -15,7 +16,21 @@ import {
   revertChangeset,
   submitChangeset,
   summarize,
+  unscheduleChangeset,
 } from "./changesets.ts";
+import {
+  AGENT_BRIEF_STATUSES,
+  BRIEF_STATUSES,
+  briefForSubmit,
+  briefWriter,
+  getBrief,
+  linkSubmission,
+  listBriefs,
+  updateBrief,
+  writeBrief,
+  type BriefInput,
+  type BriefStatus,
+} from "./briefs.ts";
 import { AicmsError } from "./errors.ts";
 import { catalog } from "../modules/catalog.ts";
 import type { SearchService } from "../modules/search.ts";
@@ -23,7 +38,7 @@ import { installFromCatalog } from "./install.ts";
 import { loadRegistry } from "../registry.ts";
 import { join } from "node:path";
 import { moduleManifest } from "./modules.ts";
-import { allows, modelPermissions, type Actor } from "./policy.ts";
+import { allows, describeReview, modelPermissions, type Actor } from "./policy.ts";
 import type { Kernel } from "./cms.ts";
 
 const signedIn = (a: Actor) => a.kind !== "public";
@@ -105,9 +120,10 @@ export function coreActions(): RegisteredAction[] {
           };
         }
         const open = signedIn(actor) ? await k.store.findOpenChangeset(actor.id) : null;
+        const briefs = actor.kind === "agent" ? (await listBriefs(k, actor)).total : 0;
         return {
           site: k.config.name,
-          you: { name: actor.id, scopes: actor.scopes, review: actor.kind === "agent" ? actor.review : undefined },
+          you: { name: actor.id, scopes: actor.scopes, review: actor.kind === "agent" ? describeReview(actor.review) : undefined },
           locales: k.config.locales,
           models: await Promise.all(
             readable.map(async (m) => ({
@@ -120,8 +136,9 @@ export function coreActions(): RegisteredAction[] {
             })),
           ),
           openChangeset: open ? { id: open.id, items: open.items.length } : null,
+          ...(briefs ? { briefs: `${briefs} brief${briefs === 1 ? "" : "s"} for you: see cms_briefs` } : {}),
           workflow: signedIn(actor)
-            ? "Read with <model>_list / <model>_get. Write with <model>_draft (block fields accept Markdown). Then call cms_submit. Nothing is public until it is merged; cms_changes shows review decisions and comments."
+            ? "Read with <model>_list / <model>_get. Write with <model>_draft (block fields accept Markdown). cms_check runs the checks; cms_submit sends the changes for review. Nothing is public until it is merged; cms_changes shows review decisions and comments. cms_briefs lists work people gave you."
             : "Read-only access. Ask the site owner for an agent token (aicms agent create <name>) to propose changes.",
         };
       },
@@ -172,11 +189,30 @@ export function coreActions(): RegisteredAction[] {
       },
     },
     {
-      name: "cms.submit",
-      description: "Run checks on your drafted changes and send them for review. If checks fail you get field-level issues to fix. Depending on your review mode the changes are merged right away or wait for a person.",
+      name: "cms.check",
+      description: "Run every check on your drafted changes without submitting: schema, conflicts and the site's content checks. Returns errors to fix, warnings a reviewer will see, and what cms_submit would do.",
+      readOnly: true,
       visible: signedIn,
-      schema: () => z.strictObject({ note: z.string().max(2000).optional().describe("What you changed and why, for the reviewer") }),
-      run: (input: { note?: string }, { actor, kernel }) => submitChangeset(kernel, actor, input.note),
+      schema: () => z.strictObject({}),
+      run: (_input: Record<string, never>, { actor, kernel }) => checkDrafts(kernel, actor),
+    },
+    {
+      name: "cms.submit",
+      description: "Run checks on your drafted changes and send them for review. If checks fail you get field-level issues to fix. Depending on your review mode the changes are merged right away or wait for a person. Pass { brief } when the changes answer a brief, and { publishAt } to ask for a publish time.",
+      visible: signedIn,
+      schema: () =>
+        z.strictObject({
+          note: z.string().max(2000).optional().describe("What you changed and why, for the reviewer"),
+          brief: z.string().optional().describe("The brief these changes answer (from cms_briefs)"),
+          publishAt: z.string().optional().describe("ISO 8601 time to publish at, e.g. 2026-12-01T09:00:00Z. A reviewer approves it as a schedule."),
+        }),
+      async run(input: { note?: string; brief?: string; publishAt?: string }, { actor, kernel }) {
+        const brief = input.brief ? await briefForSubmit(kernel, actor, input.brief) : null;
+        const publishAt = input.publishAt ?? (brief?.publishAt && Date.parse(brief.publishAt) > Date.now() ? brief.publishAt : undefined);
+        const result = await submitChangeset(kernel, actor, { note: input.note, brief: brief?.id, publishAt });
+        if (brief) await linkSubmission(kernel, actor, brief.id, result.changeset, result.status);
+        return result;
+      },
     },
     {
       name: "cms.discard",
@@ -204,10 +240,10 @@ export function coreActions(): RegisteredAction[] {
       schema: () =>
         z.strictObject({
           id: z.string().optional(),
-          status: z.enum(["submitted", "open", "merged", "rejected"]).optional().describe("Default: submitted"),
+          status: z.enum(["submitted", "scheduled", "open", "merged", "rejected"]).optional().describe("Default: submitted"),
           limit: z.number().int().min(1).max(50).optional(),
         }),
-      async run(input: { id?: string; status?: "submitted" | "open" | "merged" | "rejected"; limit?: number }, { kernel }) {
+      async run(input: { id?: string; status?: "submitted" | "scheduled" | "open" | "merged" | "rejected"; limit?: number }, { kernel }) {
         if (input.id) {
           const cs = await kernel.store.getChangeset(input.id);
           if (!cs) throw new AicmsError("not_found", `No changeset ${input.id}`);
@@ -219,16 +255,75 @@ export function coreActions(): RegisteredAction[] {
     },
     {
       name: "cms.merge",
-      description: "For reviewers: publish a changeset. Checks run again first; if something changed meanwhile, the changeset goes back to its author.",
+      description: "For reviewers: publish a changeset, now or at a time. Checks run again first; if something changed meanwhile, the changeset goes back to its author. Without { at }, a changeset whose author asked for a publish time is scheduled for it.",
       visible: reviewer,
-      schema: () => z.strictObject({ id: z.string().min(1) }),
-      async run(input: { id: string }, { actor, kernel }) {
+      schema: () =>
+        z.strictObject({
+          id: z.string().min(1),
+          at: z.string().optional().describe('ISO 8601 time to publish at, or "now"'),
+        }),
+      async run(input: { id: string; at?: string }, { actor, kernel }) {
         const cs = await kernel.store.getChangeset(input.id);
         if (cs?.items.some((i) => i.op === "install") && !installer(actor)) {
           throw new AicmsError("forbidden", "Installing a module needs the modules:install scope (the site owner has it)");
         }
-        return mergeChangeset(kernel, input.id, actor.id);
+        return mergeChangeset(kernel, input.id, actor.id, { at: input.at });
       },
+    },
+    {
+      name: "cms.unschedule",
+      description: "For reviewers: take a scheduled changeset off the schedule. It waits for review again.",
+      visible: reviewer,
+      schema: () => z.strictObject({ id: z.string().min(1) }),
+      run: (input: { id: string }, { actor, kernel }) => unscheduleChangeset(kernel, input.id, actor.id),
+    },
+    {
+      name: "cms.briefs",
+      description: "Work people gave you: briefs with a title, details, what to produce and when. Without filters: the ones not done yet. Pass { id } for one brief with its notes.",
+      readOnly: true,
+      visible: signedIn,
+      schema: () =>
+        z.strictObject({
+          id: z.string().optional(),
+          status: z.array(z.enum(BRIEF_STATUSES as [BriefStatus, ...BriefStatus[]])).optional().describe("Default: everything not done or canceled"),
+          agent: z.string().optional(),
+          limit: z.number().int().min(1).max(200).optional(),
+        }),
+      async run(input: { id?: string; status?: BriefStatus[]; agent?: string; limit?: number }, { actor, kernel }) {
+        if (input.id) return { brief: await getBrief(kernel, actor, input.id) };
+        return listBriefs(kernel, actor, input);
+      },
+    },
+    {
+      name: "cms.brief",
+      description: "For people and planning agents: write a brief for an agent, or change one ({ id }). Give it a title, details in Markdown, the agent, what to produce (model or entry), a due date and a publish time.",
+      visible: briefWriter,
+      schema: () =>
+        z.strictObject({
+          id: z.string().optional().describe("Omit to create a new brief"),
+          title: z.string().max(200).optional(),
+          details: z.string().max(20000).nullable().optional(),
+          agent: z.string().nullable().optional().describe("Omit to let any agent pick it up"),
+          model: z.string().nullable().optional(),
+          entry: z.string().nullable().optional(),
+          due: z.string().nullable().optional(),
+          publishAt: z.string().nullable().optional(),
+          status: z.enum(["open", "canceled", "done"]).optional(),
+          note: z.string().max(4000).optional().describe("Added to the brief's notes, e.g. an answer to a blocked agent"),
+        }),
+      run: (input: BriefInput & { id?: string }, { actor, kernel }) => writeBrief(kernel, actor, input.id, input),
+    },
+    {
+      name: "cms.brief_update",
+      description: 'Report on a brief: take it ("in_progress"), ask a person something ("blocked" with a note), give it back ("open"), or finish work that needed no content change ("done" with a note). Content changes are answered with cms_submit({ brief }).',
+      visible: signedIn,
+      schema: () =>
+        z.strictObject({
+          id: z.string().min(1),
+          status: z.enum(AGENT_BRIEF_STATUSES).optional(),
+          note: z.string().max(4000).optional(),
+        }),
+      run: (input: { id: string; status?: (typeof AGENT_BRIEF_STATUSES)[number]; note?: string }, { actor, kernel }) => updateBrief(kernel, actor, input.id, input),
     },
     {
       name: "cms.reject",

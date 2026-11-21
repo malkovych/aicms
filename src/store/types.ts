@@ -23,7 +23,8 @@ export interface VersionRow {
   createdAt: string;
 }
 
-export type ChangesetStatus = "open" | "submitted" | "merged" | "rejected";
+/** `scheduled`: approved by a person, merged automatically at `publishAt`. */
+export type ChangesetStatus = "open" | "submitted" | "scheduled" | "merged" | "rejected";
 
 export interface ChangesetItem {
   /** `install` items carry a module proposal (`id` is the module name, `data.options` its options). */
@@ -42,6 +43,8 @@ export interface CheckIssue {
   model: string;
   field?: string;
   message: string;
+  /** The module check that found it, e.g. "lint/avoid"; absent for schema and conflict checks. */
+  check?: string;
 }
 
 export interface ChangesetRow {
@@ -54,11 +57,32 @@ export interface ChangesetRow {
   /** Why the changeset waits for a person, if it does. */
   reviewReason?: string;
   items: ChangesetItem[];
+  /** Errors: the changeset can't be merged until they are fixed. */
   issues: CheckIssue[];
+  /** Module check warnings: shown to the reviewer; they send an "auto" agent's changes to a person. */
+  warnings?: CheckIssue[];
+  /** When to publish: asked for by the author, or set by the reviewer when scheduling. */
+  publishAt?: string;
+  /** Who scheduled it. */
+  scheduledBy?: string;
+  /** The brief this changeset answers. */
+  brief?: string;
   createdAt: string;
   updatedAt: string;
   mergedAt?: string;
   mergedBy?: string;
+}
+
+/** Changeset fields kept together in one JSON column, so new ones need no migration. */
+export const CHANGESET_META = ["warnings", "publishAt", "scheduledBy", "brief"] as const;
+
+export function changesetMeta(c: ChangesetRow): Record<string, unknown> | null {
+  const meta: Record<string, unknown> = {};
+  for (const key of CHANGESET_META) {
+    const v = c[key];
+    if (v !== undefined && !(Array.isArray(v) && !v.length)) meta[key] = v;
+  }
+  return Object.keys(meta).length ? meta : null;
 }
 
 export interface EventRow {

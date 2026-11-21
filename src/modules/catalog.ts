@@ -3,6 +3,7 @@ import { commerce } from "./commerce.ts";
 import { gitSync } from "./git-sync.ts";
 import { manualPayments, stripe } from "./payments.ts";
 import { i18n } from "./i18n.ts";
+import { lint } from "./lint.ts";
 import { media } from "./media.ts";
 import { search } from "./search.ts";
 import { seo } from "./seo.ts";
@@ -22,6 +23,7 @@ export interface CatalogEntry {
 /** Official modules that ship with AICMS. */
 export const catalog: CatalogEntry[] = [
   { name: "seo", importName: "seo", title: "SEO", summary: "Scores entries 0–100 with concrete fixes; serves sitemap.xml and robots.txt.", create: (o) => seo(o), example: 'seo({ siteUrl: "https://example.com" })' },
+  { name: "lint", importName: "lint", title: "Lint", summary: "Content checks on every change: placeholders block; filler phrases, long sentences and missing alt text warn.", create: (o) => lint(o), example: "lint()" },
   { name: "search", importName: "search", title: "Search", summary: "Ranked full-text search in any language; cms.search uses it automatically.", create: (o) => search(o), example: "search()" },
   { name: "media", importName: "media", title: "Media", summary: "Media library: uploads and URL imports, image sizes, alt text, served under /media.", create: (o) => media(o), example: "media()" },
   { name: "i18n", importName: "i18n", title: "Translations", summary: "Links entries across locales, lists what's missing, drafts translations.", create: (o) => i18n(o), example: "i18n()" },

@@ -7,8 +7,8 @@ import { ConflictError, type ChangesetItem, type ChangesetRow, type CheckIssue, 
 import { AicmsError } from "./errors.ts";
 import { findCatalog } from "../modules/catalog.ts";
 import { catalogEntry, installFromCatalog } from "./install.ts";
-import { moduleManifest } from "./modules.ts";
-import { modelPermissions, type Actor } from "./policy.ts";
+import { moduleContext, moduleManifest, type CheckInput } from "./modules.ts";
+import { allows, modelPermissions, type Actor } from "./policy.ts";
 import type { Kernel } from "./cms.ts";
 
 export const newId = (prefix: string) => `${prefix}_${BigInt("0x" + randomBytes(8).toString("hex")).toString(36)}`;
@@ -240,22 +240,131 @@ export async function checkChangeset(k: Kernel, cs: ChangesetRow): Promise<Check
   return issues;
 }
 
+/** Module checks on every create and update: errors block, warnings go to the reviewer. A check that throws becomes a warning. */
+export async function runModuleChecks(k: Kernel, cs: ChangesetRow): Promise<{ errors: CheckIssue[]; warnings: CheckIssue[] }> {
+  const errors: CheckIssue[] = [];
+  const warnings: CheckIssue[] = [];
+  const checkers = k.modules.filter((m) => m.checks && Object.keys(m.checks).length);
+  if (!checkers.length) return { errors, warnings };
+  for (const item of cs.items) {
+    if (item.op !== "create" && item.op !== "update") continue;
+    const model = k.models.get(item.model);
+    if (!model) continue;
+    const current = item.op === "update" ? await k.store.getEntry(item.id) : null;
+    if (item.op === "update" && !current) continue;
+    const data = item.op === "create" ? item.data ?? {} : applyPatch(current!.data, item.data ?? {});
+    const input: CheckInput = {
+      op: item.op,
+      model,
+      id: item.id,
+      locale: item.locale,
+      data: projectData(model, data, "blocks"),
+      before: current ? projectData(model, current.data, "blocks") : null,
+      changed: Object.keys(item.data ?? {}),
+      author: cs.actor,
+    };
+    for (const mod of checkers) {
+      const scope = new Set([...(mod.models ?? []).map((m) => m.name), ...(mod.uses ?? [])]);
+      if (!scope.has("*") && !scope.has(model.name)) continue;
+      const ctx = moduleContext(k, mod, { id: `module:${mod.name}`, kind: "system", scopes: ["*"], review: "auto" }, "internal");
+      for (const [name, check] of Object.entries(mod.checks!)) {
+        const tag = `${mod.name}/${name}`;
+        try {
+          for (const f of (await check(input, ctx)) ?? []) {
+            const issue: CheckIssue = { entry: item.id, model: model.name, ...(f.field ? { field: f.field } : {}), message: f.message, check: tag };
+            (f.level === "error" ? errors : warnings).push(issue);
+          }
+        } catch (e) {
+          warnings.push({ entry: item.id, model: model.name, message: `The ${tag} check failed: ${e instanceof Error ? e.message : String(e)}`, check: tag });
+        }
+      }
+    }
+  }
+  return { errors, warnings };
+}
+
+/** Everything a changeset must pass: schema, uniqueness, references, conflicts and module checks. */
+async function fullCheck(k: Kernel, cs: ChangesetRow) {
+  const issues = await checkChangeset(k, cs);
+  const { errors, warnings } = await runModuleChecks(k, cs);
+  return { issues: [...issues, ...errors], warnings };
+}
+
+/** The scope each item needs, for `review: { auto: [...] }` rules. */
+function neededScopes(item: ChangesetItem): string[] {
+  if (item.op === "install") return ["modules:install"];
+  if (item.op === "create") return [`${item.model}:create`];
+  if (item.op === "delete") return [`${item.model}:delete`];
+  return Object.keys(item.data ?? {}).map((f) => `${item.model}:update.${f}`);
+}
+
 function reviewReason(k: Kernel, actor: Actor, cs: ChangesetRow): string | undefined {
   if (actor.kind === "owner" || actor.kind === "system") return undefined;
-  if (actor.review === "human") return `Changes from ${actor.id} are reviewed by a person`;
+  const rule = actor.review;
+  if (rule === "human") return `Changes from ${actor.id} are reviewed by a person`;
+  if (typeof rule === "object") {
+    const outside = [...new Set(cs.items.flatMap(neededScopes))].filter((s) => !allows(rule.auto, s));
+    if (outside.length) return `${actor.id} publishes without review only ${rule.auto.join(", ") || "nothing"}; this also changes ${outside.slice(0, 3).join(", ")}${outside.length > 3 ? "…" : ""}`;
+  }
   for (const item of cs.items) {
     const can = k.models.get(item.model)?.agent?.can;
     if (can && !can.includes("publish")) return `Model "${item.model}" requires a person to publish`;
   }
+  const w = cs.warnings?.length ?? 0;
+  if (w) return `${w} check warning${w === 1 ? "" : "s"} for a person to look at`;
   return undefined;
 }
 
-export async function submitChangeset(k: Kernel, actor: Actor, note?: string) {
+const SCHEDULE_SLACK_MS = 5_000;
+
+/** A future time as ISO, or undefined for "now". Throws on nonsense. */
+export function parsePublishAt(at: string | undefined): string | undefined {
+  if (!at || at === "now") return undefined;
+  const t = Date.parse(at);
+  if (Number.isNaN(t)) throw new AicmsError("invalid", `"${at}" isn't a date. Use ISO 8601, e.g. 2026-12-01T09:00:00Z`);
+  if (t > Date.now() + 366 * 86_400_000) throw new AicmsError("invalid", "Schedule at most a year ahead");
+  return t > Date.now() + SCHEDULE_SLACK_MS ? new Date(t).toISOString() : undefined;
+}
+
+/** Checks on the caller's open changeset, without submitting: what cms_submit would say. */
+export async function checkDrafts(k: Kernel, actor: Actor) {
   const cs = await k.store.findOpenChangeset(actor.id);
   if (!cs || !cs.items.length) throw new AicmsError("invalid", "You have no drafted changes. Use a <model>_draft tool first.");
-  const issues = await checkChangeset(k, cs);
+  const { issues, warnings } = await fullCheck(k, cs);
+  const reason = issues.length ? undefined : reviewReason(k, actor, { ...cs, warnings });
+  return {
+    changeset: cs.id,
+    ready: !issues.length,
+    issues,
+    warnings,
+    ...(issues.length ? {} : { onSubmit: reason ? `waits for a person: ${reason}` : "merged right away" }),
+    next: issues.length
+      ? "Fix the issues with the <model>_draft tools, then check again."
+      : warnings.length
+        ? "Fix the warnings if you can, or explain them in the cms_submit note."
+        : "All checks pass. Call cms_submit.",
+  };
+}
+
+export interface SubmitOptions {
+  note?: string;
+  /** Ask to publish at this time (ISO 8601). A reviewer approves it as a schedule. */
+  publishAt?: string;
+  /** The brief this answers. */
+  brief?: string;
+}
+
+export async function submitChangeset(k: Kernel, actor: Actor, input: string | SubmitOptions = {}) {
+  const opts: SubmitOptions = typeof input === "string" ? { note: input } : input;
+  const cs = await k.store.findOpenChangeset(actor.id);
+  if (!cs || !cs.items.length) throw new AicmsError("invalid", "You have no drafted changes. Use a <model>_draft tool first.");
+  const publishAt = parsePublishAt(opts.publishAt);
+  const { issues, warnings } = await fullCheck(k, cs);
   cs.updatedAt = now();
-  if (note) cs.note = note;
+  if (opts.note) cs.note = opts.note;
+  if (opts.brief) cs.brief = opts.brief;
+  cs.publishAt = publishAt;
+  cs.warnings = warnings;
   if (issues.length) {
     cs.issues = issues;
     await k.store.saveChangeset(cs);
@@ -263,6 +372,7 @@ export async function submitChangeset(k: Kernel, actor: Actor, note?: string) {
       status: "needs_changes",
       changeset: cs.id,
       issues,
+      ...(warnings.length ? { warnings } : {}),
       next: "Fix these with the <model>_draft tools, then call cms_submit again.",
     };
   }
@@ -280,18 +390,44 @@ export async function submitChangeset(k: Kernel, actor: Actor, note?: string) {
       status: "submitted",
       changeset: cs.id,
       reason,
-      next: "Waiting for review. Check cms_changes later for the decision and any comment.",
+      ...(warnings.length ? { warnings } : {}),
+      ...(publishAt ? { publishAt } : {}),
+      next: publishAt
+        ? `Waiting for review. If approved, it is published at ${publishAt}. Check cms_changes later.`
+        : "Waiting for review. Check cms_changes later for the decision and any comment.",
     };
   }
   await k.store.saveChangeset(cs);
-  return { status: "merged", ...(await mergeChangeset(k, cs.id, actor.id)) };
+  if (publishAt) return schedule(k, cs, publishAt, actor.id);
+  return { status: "merged", ...(await mergeChangeset(k, cs.id, actor.id, { at: "now" })) };
 }
 
-export async function mergeChangeset(k: Kernel, id: string, by: string) {
+async function schedule(k: Kernel, cs: ChangesetRow, at: string, by: string) {
+  cs.status = "scheduled";
+  cs.publishAt = at;
+  cs.scheduledBy = by;
+  cs.reviewReason = undefined;
+  cs.updatedAt = now();
+  await k.store.saveChangeset(cs);
+  await k.emit("changeset.scheduled", summarize(cs));
+  return { status: "scheduled", changeset: cs.id, publishAt: at, next: `Published automatically at ${at}.` };
+}
+
+export interface MergeOptions {
+  /**
+   * When to publish: an ISO time schedules it, "now" publishes at once.
+   * Omitted: at the time the author asked for, if any, else now.
+   */
+  at?: string;
+}
+
+export async function mergeChangeset(k: Kernel, id: string, by: string, opts: MergeOptions = {}) {
   const cs = await k.store.getChangeset(id);
   if (!cs) throw new AicmsError("not_found", `No changeset ${id}`);
   if (cs.status === "merged" || cs.status === "rejected") throw new AicmsError("invalid", `Changeset ${id} is already ${cs.status}`);
   if (!cs.items.length) throw new AicmsError("invalid", `Changeset ${id} is empty`);
+  const install = cs.items.some((i) => i.op === "install");
+  const at = install ? undefined : parsePublishAt(opts.at ?? (cs.status === "submitted" ? cs.publishAt : undefined));
 
   const sendBack = async (issues: CheckIssue[]) => {
     cs.status = "open";
@@ -302,9 +438,11 @@ export async function mergeChangeset(k: Kernel, id: string, by: string) {
     throw new AicmsError("conflict", `Changeset ${id} can't be merged; it went back to ${cs.actor}`, { issues });
   };
 
-  const issues = await checkChangeset(k, cs);
-  if (cs.items.some((i) => i.op === "install")) return mergeInstall(k, cs, by, issues);
+  if (install) return mergeInstall(k, cs, by, await checkChangeset(k, cs));
+  const { issues, warnings } = await fullCheck(k, cs);
   if (issues.length) await sendBack(issues);
+  cs.warnings = warnings;
+  if (at) return schedule(k, cs, at, by);
 
   let entries: EntryRow[];
   try {
@@ -318,10 +456,45 @@ export async function mergeChangeset(k: Kernel, id: string, by: string) {
     changeset: id,
     actor: cs.actor,
     mergedBy: by,
+    ...(cs.brief ? { brief: cs.brief } : {}),
     entries: entries.map((e) => ({ id: e.id, model: e.model, op: ops.get(e.id), version: e.version })),
   };
   await k.emit("changeset.merged", summary);
   return summary;
+}
+
+/** Take a scheduled changeset off the schedule; it waits for review again. */
+export async function unscheduleChangeset(k: Kernel, id: string, by: string) {
+  const cs = await k.store.getChangeset(id);
+  if (!cs) throw new AicmsError("not_found", `No changeset ${id}`);
+  if (cs.status !== "scheduled") throw new AicmsError("invalid", `Changeset ${id} isn't scheduled; it is ${cs.status}`);
+  cs.status = "submitted";
+  cs.reviewReason = `Taken off the schedule by ${by}`;
+  cs.publishAt = undefined;
+  cs.scheduledBy = undefined;
+  cs.updatedAt = now();
+  await k.store.saveChangeset(cs);
+  await k.emit("changeset.unscheduled", { ...summarize(cs), by });
+  return { changeset: id, status: cs.status };
+}
+
+/**
+ * Merge every scheduled changeset whose time has come. One that no longer
+ * passes its checks goes back to its author, like a manual merge would.
+ */
+export async function publishDue(k: Kernel, at = new Date()) {
+  const due = (await k.store.listChangesets({ status: ["scheduled"], limit: 500 })).filter((cs) => cs.publishAt && Date.parse(cs.publishAt) <= at.getTime());
+  const merged: string[] = [];
+  const failed: { changeset: string; error: string }[] = [];
+  for (const cs of due.sort((a, b) => a.publishAt!.localeCompare(b.publishAt!))) {
+    try {
+      await mergeChangeset(k, cs.id, cs.scheduledBy ?? "owner", { at: "now" });
+      merged.push(cs.id);
+    } catch (e) {
+      failed.push({ changeset: cs.id, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { merged, failed };
 }
 
 /** A module proposal: install each module, then record the changeset as merged. */
@@ -380,12 +553,13 @@ export async function rejectChangeset(k: Kernel, id: string, by: string, comment
   if (!cs) throw new AicmsError("not_found", `No changeset ${id}`);
   // A module proposal never reopens: it would turn into the agent's content draft.
   if (cs.items.some((i) => i.op === "install")) final = true;
-  if (cs.status !== "submitted" && cs.status !== "open") throw new AicmsError("invalid", `Changeset ${id} is already ${cs.status}`);
+  if (cs.status !== "submitted" && cs.status !== "open" && cs.status !== "scheduled") throw new AicmsError("invalid", `Changeset ${id} is already ${cs.status}`);
   const otherOpen = await k.store.findOpenChangeset(cs.actor);
   const reopen = !final && (!otherOpen || otherOpen.id === cs.id);
   cs.status = reopen ? "open" : "rejected";
   cs.comment = comment;
   cs.reviewReason = undefined;
+  cs.scheduledBy = undefined;
   cs.updatedAt = now();
   await k.store.saveChangeset(cs);
   await k.emit("changeset.rejected", { ...summarize(cs), comment, by, reopened: reopen });
@@ -401,6 +575,10 @@ export function summarize(cs: ChangesetRow) {
     ...(cs.comment ? { comment: cs.comment } : {}),
     ...(cs.reviewReason ? { waitingBecause: cs.reviewReason } : {}),
     ...(cs.issues.length ? { issues: cs.issues } : {}),
+    ...(cs.warnings?.length ? { warnings: cs.warnings } : {}),
+    ...(cs.publishAt ? { publishAt: cs.publishAt } : {}),
+    ...(cs.scheduledBy ? { scheduledBy: cs.scheduledBy } : {}),
+    ...(cs.brief ? { brief: cs.brief } : {}),
     items: cs.items.map((i) => ({ op: i.op, model: i.model, id: i.id, ...(i.data ? { fields: Object.keys(i.data) } : {}) })),
     updatedAt: cs.updatedAt,
   };
