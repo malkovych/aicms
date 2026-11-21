@@ -30,4 +30,6 @@ npx wrangler secret put AICMS_OWNER_TOKEN
 npm run deploy
 ```
 
+Scheduled publishing runs from the cron trigger in `wrangler.jsonc` (every minute, through the Worker's `scheduled` handler). Without it, requests check for due changesets at most once a minute. Test it locally with `npx wrangler dev --test-scheduled` and `curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"`.
+
 On the edge, models are listed in `aicms.config.ts` (there is no folder to scan), installs from Studio aren't written back to the config, and live events and presence are per Worker instance. git-sync needs a file system and doesn't run here.

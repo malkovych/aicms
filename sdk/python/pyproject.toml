@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aicms"
-version = "0.4.0"
+version = "0.5.0"
 description = "Python client for AICMS, the CMS for AI agents. No dependencies."
 readme = "README.md"
 license = "MIT"

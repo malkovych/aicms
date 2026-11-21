@@ -296,7 +296,8 @@ svg.dg{display:block;width:100%;height:auto;min-width:760px;color:var(--ink);fon
 .btn{font:500 14px/1 var(--f-body);padding:11px 16px;border-radius:10px;border:1px solid var(--line);background:var(--plate);color:var(--ink);cursor:pointer}
 .btn.pri{background:var(--core);border-color:var(--core);color:var(--on-core)}
 .btn.neg{color:var(--gate)}
-.studio-notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:20px}
+.studio-notes,.work{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:20px}
+.work .note{padding:20px}
 
 /* frameworks */
 .fw{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
@@ -321,7 +322,7 @@ svg.dg{display:block;width:100%;height:auto;min-width:760px;color:var(--ink);fon
 .cmp thead th:nth-child(3){color:var(--core);border-radius:12px 12px 0 0}
 
 /* roadmap */
-.road{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.road{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
 .ph{padding:22px;display:grid;gap:10px;align-content:start}
 .ph .n{font-family:var(--f-mono);font-size:12px;color:var(--core);letter-spacing:.06em;text-transform:uppercase}
 .ph ul{margin:0;padding-left:18px;color:var(--muted);font-size:14px;display:grid;gap:4px}
@@ -333,6 +334,9 @@ footer{padding-block:40px 64px;border-top:1px solid var(--line);color:var(--mute
 footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
 
 /* ---------- responsive ---------- */
+@media (max-width:1240px){
+  .road{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
 @media (max-width:1040px){
   .hero{grid-template-columns:minmax(0,1fr);gap:44px;padding-block:44px 64px}
   .st-body{grid-template-columns:196px minmax(0,1fr)}
@@ -343,7 +347,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   .principles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .duo,.lego{grid-template-columns:minmax(0,1fr)}
   .vrow{grid-template-columns:minmax(0,1fr);gap:4px}
-  .studio-notes{grid-template-columns:minmax(0,1fr)}
+  .studio-notes,.work{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:640px){
   section.sec{padding-block:56px}

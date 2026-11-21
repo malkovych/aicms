@@ -81,9 +81,9 @@ There is nothing else to learn.
 - Every gate (MCP, REST, CLI, Studio) is a thin wrapper over this pipeline, so behaviour is identical for people and agents.
 
 ### 4.3 Policy
-- **Scopes:** `post:read`, `post:draft` (create + update), `post:update.seo` (one field), `post:delete`, `post:*`, `changesets:review`, `agents:manage`, `events:read`, `*`. Module Actions declare their own scopes, e.g. `reviews:write`.
+- **Scopes:** `post:read`, `post:draft` (create + update), `post:update.seo` (one field), `post:delete`, `post:*`, `changesets:review`, `agents:manage`, `events:read`, `briefs:write`, `*`. Module Actions declare their own scopes, e.g. `reviews:write`.
 - **Field-level tool schemas:** a draft tool only lists the fields the agent may write. With `post:update.seo` the agent's `post_draft` tool contains `id` and `seo` and nothing else.
-- **Review mode** per agent: `human` (a person approves) or `auto` (merged when every check is green and no model requires a person). The default is `human`.
+- **Review mode** per agent: `human` (a person approves), `auto` (merged when every check is green and no model requires a person), or a rule, `{ auto: ["post:update.seo", "tag:create"] }`: merged without a person only when every change is covered by those scopes. The default is `human`. A check warning always sends the change to a person.
 - **The model has the last word:** if a model's `agent.can` doesn't include `publish`, any agent changeset that touches it waits for a person, whatever the agent's review mode.
 - **Budgets:** `actionsPerHour` and `maxChangesetItems`.
 - **Kill switch:** `aicms agent revoke <name>` revokes the agent's tokens and rejects all its unmerged changesets.
@@ -230,6 +230,7 @@ A module may also have:
 | `routes` | HTTP routes, `"GET /sitemap.xml"`, with `:params` | `/media/:id/:name` |
 | `ctx.kv` | small JSON values that belong to the module | translation groups |
 | `ctx.pending(id)` | someone's unpublished draft of an entry | "already waiting for review" |
+| `checks` | content checks on every change to the models the module `uses`: errors block, warnings go to the reviewer | `lint` finds "[insert price]" |
 
 Everything a module asks for is listed in its manifest (`cms_modules`, `aicms modules`, Studio): models it adds and uses, Actions with their scopes, routes and hooks. Modules can be installed into a running server; their tools, routes and GraphQL types appear at once.
 
@@ -278,7 +279,15 @@ Added in phase 3:
 
 Payment providers report through a `payment.updated` event, so swapping Stripe for another provider doesn't touch commerce.
 
-Next: `forms` · `reviews` · `redirects` · `analytics` · `workflows` (multi-step agent processes), vector search and AI image tools.
+Added in phase 4:
+
+| Module | What it gives |
+|---|---|
+| `lint` | checks on every change: placeholders an agent left behind ("[insert price]", TODO, lorem ipsum) block the changeset; filler phrases ("delve", "it's important to note"), very long sentences, empty headings, images without alt text and dead links are warnings. The phrase list is yours to change. |
+
+`seo` also became a check: problems its audit finds in the fields a change touches reach the reviewer as warnings.
+
+Next: `forms` · `reviews` · `redirects` · `analytics`, multi-step workflows built on briefs, vector search and AI image tools.
 
 ### 6.4 Agents proposing modules
 An agent may propose installing a module. The proposal arrives in Inbox as a changeset of a special kind, listing the scopes and models the module asks for. A person with the `modules:install` scope installs it from the Inbox (`cms_propose_module`, then Approve); agents never install code themselves. A declined proposal is closed, not reopened.
@@ -314,9 +323,12 @@ An agent only sees what its scopes allow. MCP tool names use underscores (`post_
 | `<model>_get` | `<model>.get` | one entry by `id` or by a unique field such as `slug`; `drafts: true` includes your unpublished changes |
 | `<model>_draft` | `<model>.draft` | create or change an entry inside the agent's changeset |
 | `<model>_delete` | `<model>.delete` | propose deleting an entry |
-| `cms_submit` | `cms.submit` | run checks and send the changeset for review |
+| `cms_check` | `cms.check` | run every check on the drafts without submitting: errors, warnings and what submitting would do |
+| `cms_submit` | `cms.submit` | run checks and send the changeset for review; `brief` links it to a brief, `publishAt` asks for a publish time |
 | `cms_changes` | `cms.changes` | the agent's changesets, check results and reviewer comments |
-| `cms_review` / `cms_merge` / `cms_reject` | `cms.review` … | for reviewers with `changesets:review` |
+| `cms_briefs` / `cms_brief_update` | `cms.briefs` … | the agent's briefs; take one, ask a question, give it back, finish it |
+| `cms_brief` | `cms.brief` | write or change a brief: people and planning agents (`briefs:write`) |
+| `cms_review` / `cms_merge` / `cms_reject` / `cms_unschedule` | `cms.review` … | for reviewers with `changesets:review`; `cms_merge({ at })` schedules |
 | `cms_history` / `cms_restore` / `cms_revert` | `cms.history` … | an entry's versions; draft the restore of any version, or the undo of a merged changeset |
 | `cms_discard` | `cms.discard` | drop drafts that weren't submitted |
 | `cms_presence` | `cms.presence` | who is viewing or editing an entry right now, and whose drafts of it would conflict |
@@ -334,12 +346,23 @@ Agents read and write Markdown comfortably; people need a visual editor. AICMS s
 
 ### 7.5 The path of an agent's change
 1. **Connect.** The agent arrives with a token and gets its tool list.
-2. **Learn.** `cms_describe` returns schemas, guides and examples.
-3. **Draft.** Changes are written into a changeset; production is untouched.
-4. **Check.** `cms_submit` runs schema, uniqueness, reference and conflict checks. Failures come back to the agent with field-level messages.
-5. **Review.** Automatic, or a person in Studio Inbox (or `aicms changes`, `aicms merge`, `aicms reject`). A rejection comment goes back to the agent through `cms_changes` and the `changeset.rejected` event.
-6. **Publish.** Merge writes new entry versions, logs the event and fires webhooks.
-7. **Roll back.** Any version of an entry can be restored (`cms_restore`, or History in Studio), and a merged changeset can be undone as a whole (`cms_revert`). Both are drafted and published like any other change, so they are checked, reviewed and logged too.
+2. **Learn.** `cms_describe` returns schemas, guides and examples, and says how many briefs wait for the agent.
+3. **Take the work.** `cms_briefs` lists what people asked for; `cms_brief_update` takes a brief or asks a question.
+4. **Draft.** Changes are written into a changeset; production is untouched.
+5. **Check.** `cms_check` (any time) and `cms_submit` run schema, uniqueness, reference and conflict checks, then the modules' checks. Errors come back to the agent with field-level messages; warnings travel with the changeset to the reviewer.
+6. **Review.** Automatic, or a person in Studio Inbox (or `aicms changes`, `aicms merge`, `aicms reject`). A rejection comment goes back to the agent through `cms_changes`, the `changeset.rejected` event and the brief's notes.
+7. **Publish.** Now, or at a time: merge writes new entry versions, logs the event and fires webhooks. A scheduled changeset is checked again when its time comes and goes back to its author if something changed meanwhile. Merging closes the brief.
+8. **Roll back.** Any version of an entry can be restored (`cms_restore`, or History in Studio), and a merged changeset can be undone as a whole (`cms_revert`). Both are drafted and published like any other change, so they are checked, reviewed and logged too.
+
+### 7.6 Briefs, checks and schedules
+
+**Briefs** are work for agents: a title, details in Markdown, the agent (or any agent), what to produce, a due date and a publish time. People write them in Studio or with `aicms brief`; an agent with `briefs:write` can plan for others. Briefs and their notes live in kernel storage and travel as `brief.created` / `brief.updated` events to the agent they are for, over SSE and webhooks, so an agent runner can wake up when work arrives. Statuses: open → in progress → (has a question) → in review → done, or canceled.
+
+**Checks** are module code: `checks: { name: ({ op, model, data, before, changed, author }, ctx) => findings }`. They run on submit and again before merging, only for the models the module `uses`. A good check looks only at the fields the change touches, so fixing a typo doesn't drag up old problems. A check that throws becomes a warning instead of blocking content.
+
+**Schedules**: `cms_submit({ publishAt })` asks, `cms_merge({ at })` decides, `cms_unschedule` takes it back. `aicms dev` / `start` publishes due changesets every 30 seconds; on Cloudflare a cron trigger calls the Worker's `scheduled` handler (requests check once a minute as a fallback); `aicms publish-due` serves any other cron.
+
+Changesets keep warnings, the publish time, who scheduled it and the brief in one JSON column, so the next field needs no migration on SQLite, D1 or Postgres.
 
 ## 8. Studio: for people
 
@@ -357,7 +380,9 @@ Added in phase 2: **Media** (a library with drag-and-drop upload and alt text), 
 
 Added in phase 3: **presence**. The editor shows who else is on an entry, people and agents (an agent drafting a change appears as editing it), and warns when someone else's draft of it would conflict.
 
-Next: **⌘K** (commands and plain language: “find posts without a cover” → `post.list` with a filter), co-editing with Yjs, a block editor beside the frontend's live preview, and roles for people other than the owner.
+Added in phase 4: **Briefs** (write work for agents, answer their questions in the notes), a **Scheduled** tab and check warnings in **Inbox**, "Schedule…" in Inbox and in the editor, and **⌘K**: a command palette for pages, models, new entries and briefs, with full-text search over entries.
+
+Next: plain-language commands in ⌘K (“find posts without a cover” → `post.list` with a filter), co-editing with Yjs, a block editor beside the frontend's live preview, and roles for people other than the owner.
 
 ## 9. Frameworks
 
@@ -430,6 +455,7 @@ Deployment modes:
 | **1. Human in the loop** ✓ | Studio MVP and Inbox, rollback, SSE events, TypeScript and Python SDKs, Next.js and Astro adapters | the first real site |
 | **2. Lego** ✓ | module SDK, `aicms add`, official modules (seo, i18n, media, search, git-sync), agents propose modules via Inbox, GraphQL, Nuxt and SvelteKit | the ecosystem starts growing |
 | **3. Scale** ✓ | Postgres and edge, real-time presence, module registry, A2A, commerce | production for shops and media |
+| **4. Workflows** ✓ | briefs for agents, content checks and the lint module, review rules, scheduled publishing, ⌘K in Studio, `create-aicms` and a release pipeline for npm and PyPI | a team of agents works from briefs, a person approves and plans |
 
 ## 13. Decisions
 

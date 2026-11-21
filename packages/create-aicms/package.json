@@ -1,8 +1,16 @@
 {
   "name": "create-aicms",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Start an AICMS site: npm create aicms@latest my-site",
-  "keywords": ["cms", "aicms", "create", "scaffold", "ai", "agents", "mcp"],
+  "keywords": [
+    "cms",
+    "aicms",
+    "create",
+    "scaffold",
+    "ai",
+    "agents",
+    "mcp"
+  ],
   "author": "malkovych",
   "license": "MIT",
   "repository": {

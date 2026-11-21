@@ -4,7 +4,7 @@
 
 [Website](https://malkovych.github.io/aicms/) · [Architecture](ARCHITECTURE.md) · [Українською](README.uk.md)
 
-> Status: phase 3 works. AICMS runs on SQLite, Postgres or Cloudflare Workers with D1 and R2; Studio shows who is working on an entry right now; modules come from a reviewed registry; other agents connect over A2A; and commerce adds products, orders and checkout with manual payments or Stripe. All on top of the kernel, Studio, modules and adapters from phases 0–2.
+> Status: phase 4 works. People hand agents work as briefs; every change passes content checks before a person sees it; approved changes can wait for their publish time; Studio has a ⌘K palette. Underneath: the kernel, Studio, modules and adapters from phases 0–2, and from phase 3 Postgres and Cloudflare Workers, live presence, a module registry, A2A and commerce.
 
 ## Why
 
@@ -79,9 +79,32 @@ node ../../dist/cli.js reject <changeset-id> --comment "Shorter title, please"
 node ../../dist/cli.js revert <changeset-id>        # undo something already published
 ```
 
+## Briefs, checks and schedules
+
+People hand agents work as **briefs**: "Write a post about the spring menu, publish Friday at 9:00". An agent finds its briefs with `cms_briefs`, asks a person when it's stuck (`cms_brief_update` with a question), and answers with changes: `cms_submit({ brief })`. Merging closes the brief; a rejection comes back as a note.
+
+Every change passes **checks** before a person sees it: schema, conflicts, and the checks modules bring. `lint` stops a draft that still says "[insert price]" and flags "delve"; `seo` flags a missing description. Errors go back to the agent, warnings go to the reviewer, and a warning sends even an `auto` agent's change to a person. `cms_check` runs them before submitting.
+
+Approve now or **schedule** it: "Schedule for Fri 09:00" in the Inbox when the agent asked for a time, or `cms_merge({ id, at })`. `aicms dev` publishes on time; on Cloudflare a cron trigger does.
+
+```ts
+agents: {
+  writer:  { scopes: ["post:draft", "tag:draft"], review: "human" },
+  tidy:    { scopes: ["tag:draft"], review: { auto: ["tag:update.name"] } },   // renames publish themselves, nothing else does
+  planner: { scopes: ["post:read", "briefs:write"] },                          // writes briefs for the others
+},
+```
+
+```bash
+aicms brief "Write about the spring menu" --agent writer --at 2026-12-04T09:00
+aicms briefs
+aicms merge <changeset-id> --at 2026-12-04T09:00
+```
+
 ## Modules
 
 ```bash
+aicms add lint         # content checks: placeholders block, filler phrases and missing alt text warn
 aicms add seo          # scores entries, sitemap.xml and robots.txt
 aicms add search       # ranked full-text search in any language
 aicms add media        # media library with uploads, image sizes and alt text
@@ -108,12 +131,14 @@ On Cloudflare, one Worker serves everything: `export default createWorker(config
 
 Studio is the admin for people, served at `/studio/`:
 
-- **Inbox:** agents' changesets with a word-level diff. Approve, request changes (the comment goes back to the agent) or close. Undo a published changeset in one click.
+- **Inbox:** agents' changesets with a word-level diff and check warnings. Approve, schedule, request changes (the comment goes back to the agent) or close. Undo a published changeset in one click.
+- **Briefs:** write work for agents, follow it, answer their questions.
 - **Content:** forms generated from your models, a Markdown editor with preview, and every entry's history with one-click restore.
 - **Agents:** scopes, review mode, budget use and pending work; issue or revoke tokens.
 - **Media** and **Modules:** the media library, module manifests and one-click install; SEO and translation panels beside each entry.
 - **Activity:** every action by people and agents, live.
 - **Presence:** who else is on an entry, people and agents, and a warning when someone's draft would conflict.
+- **⌘K:** jump to any page or entry, start a new entry or brief.
 
 English and Ukrainian, light and dark themes, works on a phone.
 
@@ -151,8 +176,8 @@ cms.submit(note="First post")
 | Piece | Where |
 |---|---|
 | Field builders, models, Markdown ↔ blocks, slugs | `src/schema/` |
-| Action Bus, policies, changesets, rollback, module SDK and installs, live feed | `src/kernel/` |
-| Official modules: seo, search, media, i18n, git-sync, commerce, payments | `src/modules/` |
+| Action Bus, policies, changesets, checks, schedules, briefs, rollback, module SDK, live feed | `src/kernel/` |
+| Official modules: seo, search, media, i18n, git-sync, lint, commerce, payments | `src/modules/` |
 | Stores: SQLite (node:sqlite or D1) and Postgres | `src/store/` |
 | REST, OpenAPI, GraphQL, A2A, discovery, MCP, SSE, module routes, Studio | `src/gates/` |
 | Cloudflare Workers entry, module registry | `src/edge.ts`, `src/registry.ts` |
@@ -160,6 +185,7 @@ cms.submit(note="First post")
 | Studio (React + Framer Motion, shipped prebuilt in `dist/studio`) | `studio/` |
 | TypeScript client and framework adapters | `packages/` |
 | Python client | `sdk/python/` |
+| `create-aicms`, release scripts and the package smoke test | `packages/create-aicms/`, `scripts/` |
 
 ## Development
 
@@ -169,8 +195,11 @@ npm run test:pg      # the same suite on Postgres (PGlite, in-process)
 npm run test:python  # Python client
 npm run typecheck
 npm run build        # dist/ for the CLI, the packages and Studio
+npm run test:package # pack the packages, scaffold a site from the tarballs, drive it
 npm run studio       # Studio dev server on :5173, proxied to a running `aicms dev`
 ```
+
+Releases: `node scripts/version.mjs 0.6.0` sets the version everywhere; pushing the tag `v0.6.0` publishes to npm and PyPI from GitHub Actions.
 
 ## License
 

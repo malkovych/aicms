@@ -47,7 +47,7 @@
   <!-- ================= HERO ================= -->
   <div class="wrap hero">
     <div>
-      <div class="eyebrow">Відкритий код · MIT · v0.4 · листопад 2026</div>
+      <div class="eyebrow">Відкритий код · MIT · v0.5 · листопад 2026</div>
       <h1 class="wordmark"><span class="ai">AI</span>CMS</h1>
       <p class="lead">CMS, у якій AI-агенти працюють з контентом так само природно, як люди.</p>
       <p class="body">Опиши модель один раз. AICMS сам згенерує API, MCP-інструменти для агентів, адмінку для людей і типи для фронтенду. Модулі додаються як цеглинки, а кожна зміна агента проходить перевірку і відкочується одним кліком.</p>
@@ -67,7 +67,7 @@
         <a class="pri" href="https://github.com/malkovych/aicms">Відкрити на GitHub</a>
         <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.uk.md">Читати специфікацію</a>
       </div>
-      <div class="status"><i></i><span>Фаза 3 працює: Postgres і Cloudflare Workers, присутність наживо, реєстр модулів, A2A і commerce.</span></div>
+      <div class="status"><i></i><span>Фаза 4 працює: брифи для агентів, перевірки контенту, публікація за розкладом і ⌘K у Studio.</span></div>
     </div>
 
     <div class="demo" aria-label="Одна модель генерує всі інтерфейси">
@@ -591,9 +591,15 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
 
       <div class="guard">
         <div class="plate note"><span class="sw gate"></span><h3>Права до поля</h3><p><code>post:update.seo</code> дозволяє міняти лише SEO-поля. Решти моделі навіть немає в схемі інструмента.</p></div>
-        <div class="plate note"><span class="sw human"></span><h3>Режим рев'ю</h3><p><code>human</code> або <code>auto</code> для кожного агента окремо. Новим агентам за замовчуванням <code>human</code>.</p></div>
+        <div class="plate note"><span class="sw human"></span><h3>Режим рев'ю</h3><p><code>human</code>, <code>auto</code> або правило на кшталт <code>{ auto: ["post:update.seo"] }</code>. Новим агентам за замовчуванням <code>human</code>; попередження перевірки завжди йде людині.</p></div>
         <div class="plate note"><span class="sw core"></span><h3>Бюджети</h3><p>Ліміти дій на годину і розміру changeset. Перевищення ставить агента на паузу до нового вікна.</p></div>
         <div class="plate note"><span class="sw gate"></span><h3>Kill switch</h3><p>Одна команда відкликає токени агента і відхиляє всі його незмерджені зміни.</p></div>
+      </div>
+
+      <div class="work">
+        <div class="plate note"><span class="sw human"></span><h3>Брифи</h3><p>«Напиши про весняне меню, опублікуй у п'ятницю о 9:00». Агент бачить бриф через <code>cms_briefs</code>, питає, коли застряг, і відповідає через <code>cms_submit({ brief })</code>.</p></div>
+        <div class="plate note"><span class="sw mod"></span><h3>Перевірки</h3><p>Як CI, тільки для контенту. <code>lint</code> зупиняє «[insert price]» і позначає «delve», <code>seo</code> нагадує про опис. Помилки йдуть агенту, попередження — рев'юеру.</p></div>
+        <div class="plate note"><span class="sw core"></span><h3>Розклад</h3><p>Схвали зараз або на потім: <code>cms_merge({ at })</code>. Сервер публікує вчасно, на Cloudflare це робить cron trigger, а застаріла зміна повертається автору.</p></div>
       </div>
     </div>
   </section>
@@ -611,13 +617,14 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
         <div class="st-bar">
           <span class="mark"><b>AI</b>CMS</span>
           <span class="st-site">demo-shop.ua</span>
-          <div class="st-search"><span>Знайди або попроси: «статті без обкладинки»</span><span class="kbd">⌘K</span></div>
+          <div class="st-search"><span>Сторінки, записи, дії…</span><span class="kbd">⌘K</span></div>
         </div>
         <div class="st-body">
           <nav class="st-nav" aria-label="Меню Studio (приклад)">
             <a href="#studio"><svg viewBox="0 0 16 16"><path d="M4 1.8h5.5L12.5 5v9.2H4z M9.5 1.8V5h3"/></svg>Контент</a>
             <a href="#studio"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="7" r="1.2"/><path d="M2.5 12l3.5-3 3 2.2 2-1.4 2.5 2"/></svg>Медіа</a>
             <a href="#studio" class="on"><svg viewBox="0 0 16 16"><path d="M2 9l2-6h8l2 6v4H2z M2 9h3.5l1 2h3l1-2H14"/></svg>Вхідні<span class="cnt">2</span></a>
+            <a href="#studio"><svg viewBox="0 0 16 16"><rect x="3" y="2.5" width="10" height="11.5" rx="1.5"/><path d="M6 2.5h4v2H6z M5.5 8h5 M5.5 10.5h3.5"/></svg>Брифи</a>
             <a href="#studio"><svg viewBox="0 0 16 16"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 2v3 M6 9h.01 M10 9h.01"/></svg>Агенти</a>
             <a href="#studio"><svg viewBox="0 0 16 16"><rect x="2" y="8" width="6" height="5"/><rect x="8" y="8" width="6" height="5"/><rect x="5" y="3" width="6" height="5"/></svg>Модулі</a>
             <span class="sp"></span>
@@ -635,9 +642,9 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
             <h3>Нова стаття: Як обрати SPF на зиму</h3>
             <div class="checks">
               <span class="pill">✓ Схема</span>
-              <span class="pill">✓ SEO 91/100</span>
-              <span class="pill">✓ Посилання</span>
-              <span class="pill mod">alt-текст додав модуль media</span>
+              <span class="pill">✓ lint</span>
+              <span class="pill mod">⚠ SEO: опис на 172 символи</span>
+              <span class="pill core">Бриф: зимовий догляд</span>
             </div>
             <div class="diff">
               <div class="drow"><div class="fk">title</div><div class="fv add">Як обрати SPF на зиму</div></div>
@@ -647,7 +654,8 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
             </div>
             <p class="quote">Коментар агента: спирався на три схожі статті, тон за гайдом моделі post.</p>
             <div class="acts">
-              <button class="btn pri" type="button">Схвалити й опублікувати</button>
+              <button class="btn pri" type="button">Запланувати на Пт 09:00</button>
+              <button class="btn" type="button">Опублікувати зараз</button>
               <button class="btn" type="button">Коментар агенту</button>
               <button class="btn neg" type="button">Відхилити</button>
             </div>
@@ -657,8 +665,8 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
 
       <div class="studio-notes">
         <div class="plate note"><h3>Форми зі схем</h3><p>Списки, фільтри й редактор блоків з'являються, щойно ти додав модель. Верстати адмінку не треба.</p></div>
-        <div class="plate note"><h3>⌘K розуміє звичайну мову</h3><p>«Знайди статті без обкладинки» перетворюється на <code>post_list</code> з фільтром. Кожну команду видно перед запуском.</p></div>
-        <div class="plate note"><h3>Видно, хто редагує</h3><p>Людина й агент можуть працювати з одним записом одночасно. Курсори й зміни синхронізуються через Yjs.</p></div>
+        <div class="plate note"><h3>⌘K знаходить усе</h3><p>Сторінки, моделі, новий запис чи бриф і повнотекстовий пошук по всіх записах, не відриваючи рук від клавіатури.</p></div>
+        <div class="plate note"><h3>Видно, хто редагує</h3><p>Люди й агенти на одному записі видно наживо, а Studio попереджає, перш ніж чиясь чернетка створить конфлікт.</p></div>
       </div>
     </div>
   </section>
@@ -746,6 +754,7 @@ wp-config.php  .htaccess  xmlrpc.php</pre>
         <div class="plate ph"><span class="n">Фаза 1 · готово</span><h3>Людина в контурі</h3><ul><li>Studio: «Вхідні», контент, агенти, журнал</li><li>Відкат: відновити версію, скасувати changeset</li><li>Події наживо через SSE</li><li>SDK для TypeScript і Python</li><li>Адаптери Next.js і Astro</li></ul><p class="res">Перший реальний сайт</p></div>
         <div class="plate ph"><span class="n">Фаза 2 · готово</span><h3>Lego</h3><ul><li>SDK модулів, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>Модуль git-sync</li><li>Агенти пропонують модулі через «Вхідні»</li><li>Nuxt, SvelteKit</li></ul><p class="res">Екосистема модулів починає рости</p></div>
         <div class="plate ph"><span class="n">Фаза 3 · готово</span><h3>Масштаб</h3><ul><li>Postgres і Cloudflare Workers (D1, R2)</li><li>Присутність наживо в Studio</li><li>Реєстр модулів, A2A</li><li>Commerce зі Stripe або ручною оплатою</li></ul><p class="res">Продакшн для магазинів і медіа</p></div>
+        <div class="plate ph"><span class="n">Фаза 4 · готово</span><h3>Робочі процеси</h3><ul><li>Брифи для агентів</li><li>Перевірки контенту, модуль lint</li><li>Правила рев'ю</li><li>Публікація за розкладом</li><li>⌘K у Studio, <code>create-aicms</code></li></ul><p class="res">Команда агентів працює за брифами</p></div>
       </div>
       <div class="duo">
         <div class="plate note">

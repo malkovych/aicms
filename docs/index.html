@@ -47,7 +47,7 @@
   <!-- ================= HERO ================= -->
   <div class="wrap hero">
     <div>
-      <div class="eyebrow">Open source · MIT · v0.4 · November 2026</div>
+      <div class="eyebrow">Open source · MIT · v0.5 · November 2026</div>
       <h1 class="wordmark"><span class="ai">AI</span>CMS</h1>
       <p class="lead">A CMS where AI agents work with content as naturally as people do.</p>
       <p class="body">Describe a model once. AICMS generates the API, MCP tools for agents, an admin for people and types for your frontend. Modules snap in like bricks, and every change an agent makes is reviewed and can be rolled back in one click.</p>
@@ -67,7 +67,7 @@
         <a class="pri" href="https://github.com/malkovych/aicms">View on GitHub</a>
         <a href="https://github.com/malkovych/aicms/blob/main/ARCHITECTURE.md">Read the spec</a>
       </div>
-      <div class="status"><i></i><span>Phase 3 works: Postgres and Cloudflare Workers, live presence, a module registry, A2A and commerce.</span></div>
+      <div class="status"><i></i><span>Phase 4 works: briefs for agents, content checks, scheduled publishing and ⌘K in Studio.</span></div>
     </div>
 
     <div class="demo" aria-label="One model generates every interface">
@@ -591,9 +591,15 @@ Snow reflects up to 80% of UV rays.
 
       <div class="guard">
         <div class="plate note"><span class="sw gate"></span><h3>Field-level scopes</h3><p><code>post:update.seo</code> lets an agent change SEO fields only. The rest of the model isn't even in its tool schema.</p></div>
-        <div class="plate note"><span class="sw human"></span><h3>Review mode</h3><p><code>human</code> or <code>auto</code>, per agent. New agents default to <code>human</code>.</p></div>
+        <div class="plate note"><span class="sw human"></span><h3>Review mode</h3><p><code>human</code>, <code>auto</code>, or a rule like <code>{ auto: ["post:update.seo"] }</code>. New agents default to <code>human</code>; a check warning always goes to a person.</p></div>
         <div class="plate note"><span class="sw core"></span><h3>Budgets</h3><p>Limits on actions per hour and on changeset size. Going over pauses the agent until the window resets.</p></div>
         <div class="plate note"><span class="sw gate"></span><h3>Kill switch</h3><p>One command revokes the agent's tokens and rejects every change it hasn't had merged.</p></div>
+      </div>
+
+      <div class="work">
+        <div class="plate note"><span class="sw human"></span><h3>Briefs</h3><p>“Write about the spring menu, publish Friday 9:00.” The agent finds it with <code>cms_briefs</code>, asks when it's stuck and answers with <code>cms_submit({ brief })</code>.</p></div>
+        <div class="plate note"><span class="sw mod"></span><h3>Checks</h3><p>Like CI for content. <code>lint</code> stops “[insert price]” and flags “delve”, <code>seo</code> flags a missing description. Errors go back to the agent, warnings to the reviewer.</p></div>
+        <div class="plate note"><span class="sw core"></span><h3>Schedules</h3><p>Approve now or for later: <code>cms_merge({ at })</code>. The server publishes on time, a cron trigger does it on Cloudflare, and a stale change goes back to its author.</p></div>
       </div>
     </div>
   </section>
@@ -611,13 +617,14 @@ Snow reflects up to 80% of UV rays.
         <div class="st-bar">
           <span class="mark"><b>AI</b>CMS</span>
           <span class="st-site">demo-shop.com</span>
-          <div class="st-search"><span>Find or ask: “posts without a cover”</span><span class="kbd">⌘K</span></div>
+          <div class="st-search"><span>Search pages, entries, actions…</span><span class="kbd">⌘K</span></div>
         </div>
         <div class="st-body">
           <nav class="st-nav" aria-label="Studio menu (example)">
             <a href="#studio"><svg viewBox="0 0 16 16"><path d="M4 1.8h5.5L12.5 5v9.2H4z M9.5 1.8V5h3"/></svg>Content</a>
             <a href="#studio"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="7" r="1.2"/><path d="M2.5 12l3.5-3 3 2.2 2-1.4 2.5 2"/></svg>Media</a>
             <a href="#studio" class="on"><svg viewBox="0 0 16 16"><path d="M2 9l2-6h8l2 6v4H2z M2 9h3.5l1 2h3l1-2H14"/></svg>Inbox<span class="cnt">2</span></a>
+            <a href="#studio"><svg viewBox="0 0 16 16"><rect x="3" y="2.5" width="10" height="11.5" rx="1.5"/><path d="M6 2.5h4v2H6z M5.5 8h5 M5.5 10.5h3.5"/></svg>Briefs</a>
             <a href="#studio"><svg viewBox="0 0 16 16"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 2v3 M6 9h.01 M10 9h.01"/></svg>Agents</a>
             <a href="#studio"><svg viewBox="0 0 16 16"><rect x="2" y="8" width="6" height="5"/><rect x="8" y="8" width="6" height="5"/><rect x="5" y="3" width="6" height="5"/></svg>Modules</a>
             <span class="sp"></span>
@@ -635,9 +642,9 @@ Snow reflects up to 80% of UV rays.
             <h3>New post: How to choose SPF for winter</h3>
             <div class="checks">
               <span class="pill">✓ Schema</span>
-              <span class="pill">✓ SEO 91/100</span>
-              <span class="pill">✓ Links</span>
-              <span class="pill mod">media module added alt text</span>
+              <span class="pill">✓ lint</span>
+              <span class="pill mod">⚠ SEO: description is 172 characters</span>
+              <span class="pill core">Brief: winter skincare</span>
             </div>
             <div class="diff">
               <div class="drow"><div class="fk">title</div><div class="fv add">How to choose SPF for winter</div></div>
@@ -647,7 +654,8 @@ Snow reflects up to 80% of UV rays.
             </div>
             <p class="quote">Agent note: based on three similar posts, tone follows the post model's guide.</p>
             <div class="acts">
-              <button class="btn pri" type="button">Approve and publish</button>
+              <button class="btn pri" type="button">Schedule for Fri 09:00</button>
+              <button class="btn" type="button">Publish now</button>
               <button class="btn" type="button">Comment to agent</button>
               <button class="btn neg" type="button">Reject</button>
             </div>
@@ -657,8 +665,8 @@ Snow reflects up to 80% of UV rays.
 
       <div class="studio-notes">
         <div class="plate note"><h3>Forms from schemas</h3><p>Lists, filters and the block editor appear as soon as you add a model. There's no admin to build.</p></div>
-        <div class="plate note"><h3>⌘K understands plain language</h3><p>“Find posts without a cover” becomes <code>post_list</code> with a filter. You see every command before it runs.</p></div>
-        <div class="plate note"><h3>See who is editing</h3><p>A person and an agent can work on the same entry at once. Cursors and changes sync through Yjs.</p></div>
+        <div class="plate note"><h3>⌘K finds anything</h3><p>Pages, models, a new entry or brief, and full-text search over every entry, from the keyboard.</p></div>
+        <div class="plate note"><h3>See who is editing</h3><p>People and agents on the same entry show up live, and Studio warns before someone's draft would conflict.</p></div>
       </div>
     </div>
   </section>
@@ -746,6 +754,7 @@ Snow reflects up to 80% of UV rays.
         <div class="plate ph"><span class="n">Phase 1 · done</span><h3>Human in the loop</h3><ul><li>Studio: Inbox, Content, Agents, Activity</li><li>Rollback: restore a version, undo a changeset</li><li>Live events over SSE</li><li>TypeScript and Python SDKs</li><li>Next.js and Astro adapters</li></ul><p class="res">The first real site</p></div>
         <div class="plate ph"><span class="n">Phase 2 · done</span><h3>Lego</h3><ul><li>Module SDK, <code>aicms add</code></li><li>seo, i18n, media, search</li><li>git-sync module</li><li>Agents propose modules via Inbox</li><li>Nuxt, SvelteKit</li></ul><p class="res">The module ecosystem starts growing</p></div>
         <div class="plate ph"><span class="n">Phase 3 · done</span><h3>Scale</h3><ul><li>Postgres and Cloudflare Workers (D1, R2)</li><li>Live presence in Studio</li><li>Module registry, A2A</li><li>Commerce with Stripe or manual payments</li></ul><p class="res">Production for shops and media</p></div>
+        <div class="plate ph"><span class="n">Phase 4 · done</span><h3>Workflows</h3><ul><li>Briefs for agents</li><li>Content checks, the lint module</li><li>Review rules</li><li>Scheduled publishing</li><li>⌘K in Studio, <code>create-aicms</code></li></ul><p class="res">A team of agents works from briefs</p></div>
       </div>
       <div class="duo">
         <div class="plate note">

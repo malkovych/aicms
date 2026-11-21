@@ -4,7 +4,7 @@
 
 [Сайт](https://malkovych.github.io/aicms/uk/) · [Архітектура](ARCHITECTURE.uk.md) · [English](README.md)
 
-> Статус: фаза 3 працює. AICMS працює на SQLite, Postgres або Cloudflare Workers з D1 і R2; Studio показує, хто зараз працює із записом; модулі беруться з перевіреного реєстру; інші агенти підключаються через A2A; а commerce додає товари, замовлення й checkout з ручною оплатою або Stripe. Усе це поверх ядра, Studio, модулів і адаптерів з фаз 0–2.
+> Статус: фаза 4 працює. Люди дають агентам завдання брифами; кожна зміна проходить перевірки контенту, перш ніж її побачить людина; схвалені зміни можуть чекати свого часу публікації; у Studio є палітра ⌘K. Під цим: ядро, Studio, модулі й адаптери з фаз 0–2, а з фази 3 — Postgres і Cloudflare Workers, присутність наживо, реєстр модулів, A2A і commerce.
 
 ## Навіщо
 
@@ -15,6 +15,34 @@ WordPress створювали для людей, які клацають адм
 - **Права до поля.** Агент зі scope `post:update.seo` бачить у схемі інструмента лише поле `seo`.
 - **Markdown на вході, блоки в базі.** Агент пише Markdown, AICMS зберігає структуровані блоки.
 - **Модулі як Lego.** Модуль — одна папка з одним маніфестом, який каже, що модуль дає і що йому потрібно.
+
+## Цілий сайт у двох файлах
+
+```ts
+// models/post.ts
+import { defineModel, field } from "aicms"
+
+export default defineModel({
+  name: "post",
+  fields: {
+    title: field.text({ required: true }),
+    slug:  field.slug({ from: "title" }),
+    body:  field.blocks(["paragraph", "heading", "image", "quote", "cta"]),
+  },
+  agent: { guide: "Короткі речення, дружній експертний тон", can: ["create", "update"] },
+})
+```
+
+```ts
+// aicms.config.ts
+import { defineConfig, sqlite } from "aicms"
+
+export default defineConfig({
+  db: sqlite(".aicms/data.db"),
+  public: ["post:read"],
+  agents: { writer: { scopes: ["post:draft"], review: "human" } },
+})
+```
 
 ## Швидкий старт
 
@@ -36,6 +64,12 @@ node ../../dist/cli.js dev                   # Studio, REST, MCP і події �
 claude mcp add --transport http aicms http://localhost:4321/mcp --header "Authorization: Bearer <token>"
 ```
 
+Або запусти його через stdio, без сервера:
+
+```bash
+node ../../dist/cli.js mcp --agent writer
+```
+
 Усе, що агент надішле, з'явиться у «Вхідних» Studio з diff «було / стало». Рев'ю можна робити й у терміналі:
 
 ```bash
@@ -45,9 +79,32 @@ node ../../dist/cli.js reject <changeset-id> --comment "Коротший заг�
 node ../../dist/cli.js revert <changeset-id>        # скасувати вже опубліковане
 ```
 
+## Брифи, перевірки й розклад
+
+Люди дають агентам завдання **брифами**: «Напиши пост про весняне меню, опублікуй у п'ятницю о 9:00». Агент бачить свої брифи через `cms_briefs`, питає людину, коли застряг (`cms_brief_update` із питанням), і відповідає змінами: `cms_submit({ brief })`. Злиття закриває бриф, а відмова повертається нотаткою.
+
+Кожна зміна проходить **перевірки**, перш ніж її побачить людина: схема, конфлікти й перевірки, які приносять модулі. `lint` зупиняє чернетку, де досі написано «[insert price]», і позначає «delve»; `seo` нагадує про відсутній опис. Помилки повертаються агенту, попередження йдуть рев'юеру, і попередження віддає людині навіть зміну агента з `auto`. `cms_check` запускає їх до сабміту.
+
+Схвали зараз або **заплануй**: «Запланувати на Пт 09:00» у «Вхідних», якщо агент попросив час, або `cms_merge({ id, at })`. `aicms dev` публікує вчасно; на Cloudflare це робить cron trigger.
+
+```ts
+agents: {
+  writer:  { scopes: ["post:draft", "tag:draft"], review: "human" },
+  tidy:    { scopes: ["tag:draft"], review: { auto: ["tag:update.name"] } },   // перейменування публікуються самі, решта ні
+  planner: { scopes: ["post:read", "briefs:write"] },                          // пише брифи для інших
+},
+```
+
+```bash
+aicms brief "Напиши про весняне меню" --agent writer --at 2026-12-04T09:00
+aicms briefs
+aicms merge <changeset-id> --at 2026-12-04T09:00
+```
+
 ## Модулі
 
 ```bash
+aicms add lint         # перевірки контенту: заглушки блокують, слова-паразити й відсутній alt попереджають
 aicms add seo          # оцінка записів, sitemap.xml і robots.txt
 aicms add search       # пошук будь-якою мовою з ранжуванням
 aicms add media        # медіатека із завантаженням, розмірами зображень і alt-текстом
@@ -74,12 +131,14 @@ db: d1("DB")                             // Cloudflare Workers, див. examples
 
 Studio — адмінка для людей за адресою `/studio/`:
 
-- **Вхідні:** changesets від агентів із diff до слова. Схвалити, попросити правки (коментар іде агенту) або закрити. Опублікований changeset скасовується одним кліком.
+- **Вхідні:** changesets від агентів із diff до слова й попередженнями перевірок. Схвалити, запланувати, попросити правки (коментар іде агенту) або закрити. Опублікований changeset скасовується одним кліком.
+- **Брифи:** завдання для агентів, їхній стан і відповіді на питання агентів.
 - **Контент:** форми, згенеровані з моделей, Markdown-редактор із переглядом, історія кожного запису й відновлення версії одним кліком.
 - **Агенти:** scopes, режим рев'ю, використання бюджету, незавершена робота; видача й відкликання токенів.
 - **Медіа** і **Модулі:** медіатека, маніфести модулів і встановлення одним кліком; панелі SEO й перекладів біля кожного запису.
 - **Журнал:** кожна дія людей і агентів наживо.
 - **Присутність:** хто ще працює із записом, люди й агенти, і попередження, коли чиясь чернетка створить конфлікт.
+- **⌘K:** перейти на будь-яку сторінку чи запис, створити запис або бриф.
 
 Англійська й українська, світла й темна теми, працює на телефоні.
 
@@ -117,8 +176,8 @@ cms.submit(note="Перший пост")
 | Частина | Де |
 |---|---|
 | Поля, моделі, Markdown ↔ блоки, slugs | `src/schema/` |
-| Action Bus, політики, changesets, відкат, SDK модулів і встановлення, стрічка подій | `src/kernel/` |
-| Офіційні модулі: seo, search, media, i18n, git-sync, commerce, оплата | `src/modules/` |
+| Action Bus, політики, changesets, перевірки, розклад, брифи, відкат, SDK модулів, стрічка подій | `src/kernel/` |
+| Офіційні модулі: seo, search, media, i18n, git-sync, lint, commerce, оплата | `src/modules/` |
 | Сховища: SQLite (node:sqlite або D1) і Postgres | `src/store/` |
 | REST, OpenAPI, GraphQL, A2A, discovery, MCP, SSE, маршрути модулів, Studio | `src/gates/` |
 | Вхід для Cloudflare Workers, реєстр модулів | `src/edge.ts`, `src/registry.ts` |
@@ -126,6 +185,7 @@ cms.submit(note="Перший пост")
 | Studio (React + Framer Motion, готова збірка лежить у `dist/studio`) | `studio/` |
 | TypeScript-клієнт і адаптери фреймворків | `packages/` |
 | Клієнт для Python | `sdk/python/` |
+| `create-aicms`, скрипти релізу й смоук-тест пакетів | `packages/create-aicms/`, `scripts/` |
 
 ## Розробка
 
@@ -135,8 +195,11 @@ npm run test:pg      # той самий набір на Postgres (PGlite у п�
 npm run test:python  # клієнт для Python
 npm run typecheck
 npm run build        # dist/ для CLI, пакетів і Studio
+npm run test:package # зібрати пакети, створити сайт з архівів і прогнати його
 npm run studio       # dev-сервер Studio на :5173, проксі до запущеного `aicms dev`
 ```
+
+Релізи: `node scripts/version.mjs 0.6.0` ставить версію всюди; пуш тегу `v0.6.0` публікує пакети в npm і PyPI з GitHub Actions.
 
 ## Ліцензія
 

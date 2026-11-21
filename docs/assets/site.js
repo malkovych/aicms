@@ -51,7 +51,7 @@
   /* ---------- lego modules ---------- */
   var wrap = document.getElementById("legoBricks");
   if (!wrap) return;
-  var BASE_TOOLS = ["cms_describe", "cms_search", "cms_submit", "cms_changes", "post_list", "post_get", "post_draft", "post_delete"];
+  var BASE_TOOLS = ["cms_describe", "cms_search", "cms_check", "cms_submit", "cms_changes", "cms_briefs", "post_list", "post_get", "post_draft", "post_delete"];
   var MODS = {
     seo: { label: "SEO", provides: "seo", tools: ["seo_audit", "seo_report"] },
     i18n: { label: "i18n", provides: "i18n", tools: ["i18n_translate", "i18n_missing"] },
