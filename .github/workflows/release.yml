@@ -2,8 +2,9 @@ name: Release
 # Push a tag v<version> (matching package.json) to publish to npm and PyPI.
 # Both use trusted publishing (OIDC), so there are no tokens to store or rotate:
 #   npm:  each package trusts this repo and release.yml (npm trust github …). npm
-#         only allows that once a package exists, so its first version is
-#         published by hand (npm login, node scripts/publish.mjs).
+#         only allows that once a package exists, so the first release can use a
+#         short-lived granular token in the NPM_TOKEN secret instead; delete the
+#         secret once trusted publishing is set up.
 #   PyPI: a trusted publisher for this repo, release.yml and the "pypi"
 #         environment, added on pypi.org (as a pending publisher before the first release).
 on:
@@ -33,6 +34,9 @@ jobs:
       - run: npm run build
       - run: npm run test:package
       - run: node scripts/publish.mjs --provenance
+        env:
+          # The NPM_TOKEN secret for a first release; with no secret npm uses OIDC.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
   pypi:
     runs-on: ubuntu-latest
     environment: pypi

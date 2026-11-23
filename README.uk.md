@@ -49,35 +49,30 @@ export default defineConfig({
 Потрібен Node.js 22.13 або новіший (AICMS використовує вбудований `node:sqlite`).
 
 ```bash
-git clone https://github.com/malkovych/aicms && cd aicms
-npm install && npm run build
-cd examples/blog
-node ../../dist/cli.js agent create writer   # покаже токен один раз
-node ../../dist/cli.js dev                   # Studio, REST, MCP і події на :4321
+npm create aicms@latest my-site
+cd my-site
+npm run dev        # Studio, REST, MCP і події на :4321
 ```
 
-`dev` показує одноразове посилання для входу в Studio. Відкрий його, і Studio триматиме вхід 30 днів. `aicms login` дає нове посилання будь-коли.
+`create-aicms` встановлює `aicms` і створює `aicms.config.ts`, дві моделі для прикладу, `.mcp.json` та `AGENTS.md`. `dev` показує одноразове посилання для входу в Studio. Відкрий його, і Studio триматиме вхід 30 днів. `npx aicms login` дає нове посилання будь-коли.
 
-Підключи MCP-клієнт (наприклад, Claude Code) з цим токеном:
+Агенти для коду, що читають `.mcp.json` (Claude Code, Cursor), отримують інструменти сайту як агент `writer`, щойно відкриєш папку: через stdio, без токена. Будь-який інший агент запускає той самий сервер командою `npx aicms mcp --agent writer`. Щоб підключитися через HTTP, видай токен:
 
 ```bash
+npx aicms agent create writer      # покаже токен один раз
 claude mcp add --transport http aicms http://localhost:4321/mcp --header "Authorization: Bearer <token>"
-```
-
-Або запусти його через stdio, без сервера:
-
-```bash
-node ../../dist/cli.js mcp --agent writer
 ```
 
 Усе, що агент надішле, з'явиться у «Вхідних» Studio з diff «було / стало». Рев'ю можна робити й у терміналі:
 
 ```bash
-node ../../dist/cli.js changes
-node ../../dist/cli.js merge <changeset-id>
-node ../../dist/cli.js reject <changeset-id> --comment "Коротший заголовок, будь ласка"
-node ../../dist/cli.js revert <changeset-id>        # скасувати вже опубліковане
+npx aicms changes
+npx aicms merge <changeset-id>
+npx aicms reject <changeset-id> --comment "Коротший заголовок, будь ласка"
+npx aicms revert <changeset-id>        # скасувати вже опубліковане
 ```
+
+Або з вихідного коду: `git clone https://github.com/malkovych/aicms && cd aicms && npm install && npm run build`, а потім `node ../../dist/cli.js dev` у `examples/blog`.
 
 ## Брифи, перевірки й розклад
 

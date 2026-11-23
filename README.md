@@ -49,35 +49,30 @@ export default defineConfig({
 Requires Node.js 22.13 or newer (AICMS uses the built-in `node:sqlite`).
 
 ```bash
-git clone https://github.com/malkovych/aicms && cd aicms
-npm install && npm run build
-cd examples/blog
-node ../../dist/cli.js agent create writer   # prints a token once
-node ../../dist/cli.js dev                   # Studio, REST, MCP and events on :4321
+npm create aicms@latest my-site
+cd my-site
+npm run dev        # Studio, REST, MCP and events on :4321
 ```
 
-`dev` prints a one-time Studio sign-in link. Open it, and Studio keeps you signed in for 30 days. `aicms login` makes a new link at any time.
+`create-aicms` installs `aicms` and writes `aicms.config.ts`, two example models, `.mcp.json` and `AGENTS.md`. `dev` prints a one-time Studio sign-in link. Open it, and Studio keeps you signed in for 30 days. `npx aicms login` makes a new link at any time.
 
-Connect an MCP client (Claude Code, for example) with the token:
+Coding agents that read `.mcp.json` (Claude Code, Cursor) get the site's tools as the `writer` agent when you open the folder, over stdio, with no token. Any other agent runs the same server with `npx aicms mcp --agent writer`. To connect over HTTP, issue a token:
 
 ```bash
+npx aicms agent create writer      # prints a token once
 claude mcp add --transport http aicms http://localhost:4321/mcp --header "Authorization: Bearer <token>"
-```
-
-Or run it over stdio without a server:
-
-```bash
-node ../../dist/cli.js mcp --agent writer
 ```
 
 Whatever the agent submits appears in Studio's Inbox with a before/after diff. You can also review from the terminal:
 
 ```bash
-node ../../dist/cli.js changes
-node ../../dist/cli.js merge <changeset-id>
-node ../../dist/cli.js reject <changeset-id> --comment "Shorter title, please"
-node ../../dist/cli.js revert <changeset-id>        # undo something already published
+npx aicms changes
+npx aicms merge <changeset-id>
+npx aicms reject <changeset-id> --comment "Shorter title, please"
+npx aicms revert <changeset-id>        # undo something already published
 ```
+
+From source instead: `git clone https://github.com/malkovych/aicms && cd aicms && npm install && npm run build`, then `node ../../dist/cli.js dev` in `examples/blog`.
 
 ## Briefs, checks and schedules
 
