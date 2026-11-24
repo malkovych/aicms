@@ -21,7 +21,7 @@
   "homepage": "https://malkovych.github.io/aicms/",
   "type": "module",
   "bin": {
-    "create-aicms": "./index.js"
+    "create-aicms": "index.js"
   },
   "files": [
     "index.js"

@@ -24,7 +24,7 @@
   "homepage": "https://malkovych.github.io/aicms/",
   "type": "module",
   "bin": {
-    "aicms": "./dist/cli.js"
+    "aicms": "dist/cli.js"
   },
   "exports": {
     ".": {
