@@ -194,7 +194,7 @@ npm run test:package # pack the packages, scaffold a site from the tarballs, dri
 npm run studio       # Studio dev server on :5173, proxied to a running `aicms dev`
 ```
 
-Releases: `node scripts/version.mjs 0.6.0` sets the version everywhere; pushing the tag `v0.6.0` publishes to npm and PyPI from GitHub Actions.
+Releases: `node scripts/version.mjs 0.6.0` sets the version everywhere; pushing the tag `v0.6.0` publishes to npm and PyPI from GitHub Actions with trusted publishing, no tokens. Actions → Release → Run workflow with “check trust” confirms every npm package trusts the workflow, without publishing.
 
 ## License
 

@@ -194,7 +194,7 @@ npm run test:package # зібрати пакети, створити сайт з
 npm run studio       # dev-сервер Studio на :5173, проксі до запущеного `aicms dev`
 ```
 
-Релізи: `node scripts/version.mjs 0.6.0` ставить версію всюди; пуш тегу `v0.6.0` публікує пакети в npm і PyPI з GitHub Actions.
+Релізи: `node scripts/version.mjs 0.6.0` ставить версію всюди; пуш тегу `v0.6.0` публікує пакети в npm і PyPI з GitHub Actions через trusted publishing, без токенів. Actions → Release → Run workflow з «check trust» перевіряє, що кожен npm-пакет довіряє workflow, нічого не публікуючи.
 
 ## Ліцензія
 

@@ -11,10 +11,28 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      check_trust:
+        description: Only check that every npm package trusts this workflow (publishes nothing)
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
+  trust:
+    if: inputs.check_trust
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: node scripts/trust.mjs --check
   npm:
+    if: ${{ !inputs.check_trust }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,6 +56,7 @@ jobs:
           # The NPM_TOKEN secret for a first release; with no secret npm uses OIDC.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || secrets.AICMS }}
   pypi:
+    if: ${{ !inputs.check_trust }}
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
